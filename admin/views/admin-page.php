@@ -69,6 +69,7 @@ function bgm_render_admin_page() {
                         <th width="80">Rating</th>
                         <th width="100">Complexity</th>
                         <th width="80">Actions</th>
+                        <th width="80">Delete</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -100,6 +101,14 @@ function bgm_render_admin_page() {
                                     class="button edit-game" 
                                     data-id="<?php echo esc_attr($game['id']); ?>">
                                     Edit
+                                </button>
+                            </td>
+                            <td>
+                                <button type="button" 
+                                    class="button button-link-delete delete-game" 
+                                    data-id="<?php echo esc_attr($game['bgg_id']); ?>"
+                                    data-name="<?php echo esc_attr($game['name']); ?>">
+                                    Delete
                                 </button>
                             </td>
                         </tr>
@@ -210,5 +219,24 @@ function bgm_render_admin_page() {
             </form>
         </div>
     </div>
+    <!-- Delete Confirmation Modal -->
+        <div id="delete-game-modal" class="bgm-modal" style="display: none;">
+            <div class="bgm-modal-content">
+                <span class="bgm-close">&times;</span>
+                <h2>Confirm Deletion</h2>
+                <p>Are you sure you want to delete <strong id="delete-game-name"></strong>?</p>
+                <p>This action cannot be undone.</p>
+                
+                <form id="delete-game-form" method="post">
+                    <input type="hidden" id="delete_game_id" name="game_id" value="">
+                    <?php wp_nonce_field('bgm_delete_game', 'bgm_delete_nonce'); ?>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="button bgm-cancel-delete">Cancel</button>
+                        <button type="submit" class="button button-link-delete">Delete Game</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     <?php
 }

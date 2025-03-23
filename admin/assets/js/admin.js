@@ -181,4 +181,98 @@ jQuery(document).ready(function($) {
         modal.css('display', 'none');
         form[0].reset();
     }
+
+    // Delete button functionality
+    $('.delete-game').on('click', function() {
+        var gameId = $(this).data('id');
+        var gameName = $(this).data('name');
+        
+        // Set values in the delete confirmation modal
+        $('#delete-game-name').text(gameName);
+        $('#delete_game_id').val(gameId);
+        
+        // Show delete modal
+        $('#delete-game-modal').css('display', 'block');
+    });
+
+    // Close delete modal when clicking the close button or cancel button
+    $('.bgm-close, .bgm-cancel-delete').on('click', function() {
+        closeDeleteModal();
+    });
+
+    // Close delete modal when clicking outside of it
+    $(window).on('click', function(event) {
+        if ($(event.target).is($('#delete-game-modal'))) {
+            closeDeleteModal();
+        }
+    });
+
+    // Handle delete form submission
+    $('#delete-game-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        // Show loading state
+        var submitBtn = $(this).find('button[type="submit"]');
+        var originalText = submitBtn.text();
+        submitBtn.prop('disabled', true).text('Deleting...');
+        
+        // Get form data
+        var formData = $(this).serialize();
+        
+        // Send AJAX request
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'bgm_delete_game_ajax',
+                formData: formData
+            },
+            success: function(response) {
+                submitBtn.prop('disabled', false).text(originalText);
+                
+                if (response.success) {
+                    // Show success message
+                    $('<div class="notice notice-success is-dismissible"><p>' + response.message + '</p></div>')
+                        .insertAfter('.wrap h1')
+                        .delay(3000)
+                        .fadeOut(400, function() {
+                            $(this).remove();
+                        });
+                    
+                    // Remove the table row
+                    $('#game-row-' + response.game_id).fadeOut(400, function() {
+                        $(this).remove();
+                    });
+                    
+                    // Close the modal
+                    closeDeleteModal();
+                } else {
+                    // Show error message in the form
+                    $('<div class="notice notice-error"><p>' + response.message + '</p></div>')
+                        .insertAfter($('#delete-game-form').find('h2'))
+                        .delay(3000)
+                        .fadeOut(400, function() {
+                            $(this).remove();
+                        });
+                }
+            },
+            error: function() {
+                submitBtn.prop('disabled', false).text(originalText);
+                
+                // Show generic error message
+                $('<div class="notice notice-error"><p>An error occurred. Please try again.</p></div>')
+                    .insertAfter($('#delete-game-form').find('h2'))
+                    .delay(3000)
+                    .fadeOut(400, function() {
+                        $(this).remove();
+                    });
+            }
+        });
+    });
+
+    // Function to close the delete modal
+    function closeDeleteModal() {
+        $('#delete-game-modal').css('display', 'none');
+        $('#delete_game_id').val('');
+    }
 });

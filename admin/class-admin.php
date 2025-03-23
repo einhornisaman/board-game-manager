@@ -14,6 +14,7 @@ class BGM_Admin {
         add_action('wp_ajax_bgm_search_games_ajax', array($this, 'ajax_search_games_ajax'));
         add_action('wp_ajax_bgm_get_game_ajax', array($this, 'ajax_get_game'));
         add_action('wp_ajax_bgm_update_game_ajax', array($this, 'ajax_update_game'));
+        add_action('wp_ajax_bgm_delete_game_ajax', array($this, 'ajax_delete_game'));
     }
     
     /**
@@ -32,8 +33,8 @@ class BGM_Admin {
         
         add_submenu_page(
             'board-game-manager',
-            'Add/Remove Games',
-            'Add/Remove Games',
+            'Add Games',
+            'Add Games',
             'manage_options',
             'bgm-add-remove',
             array($this, 'add_remove_page')
@@ -78,14 +79,13 @@ class BGM_Admin {
         bgm_render_admin_page();
     }
     
-    /**
-     * Display add/remove games page
+        /**
+     * Display add games page
      */
     public function add_remove_page() {
         // Process BGG search if form submitted
         $search_results = array();
         $result = array();
-        $delete_result = array();
         
         if (isset($_POST['bgg_search_term']) && !empty($_POST['bgg_search_term'])) {
             $search_term = sanitize_text_field($_POST['bgg_search_term']);
@@ -98,54 +98,11 @@ class BGM_Admin {
             $result = BGM_BGG_API::import_game($bgg_id);
         }
         
-        // Process game deletion
-        if (isset($_POST['delete_game_id']) && !empty($_POST['delete_game_id'])) {
-            $game_id = intval($_POST['delete_game_id']);
-            $delete_result = $this->delete_game($game_id);
-        }
-        
         // Include the view file
         require_once BGM_PLUGIN_DIR . 'admin/views/add-remove-page.php';
         
-        // Call the render function (you'll need to create this in add-remove-page.php)
-        bgm_render_add_remove_page($search_results, $result, $delete_result);
-    }
-    
-    /**
-     * Delete game by BGG ID
-     */
-    private function delete_game($bgg_id) {
-        global $wpdb;
-        $table_name = $wpdb->prefix . 'bgm_games';
-        
-        // Get the game name first for confirmation message
-        $game = $wpdb->get_row($wpdb->prepare("SELECT id, name FROM $table_name WHERE bgg_id = %d", $bgg_id));
-        
-        if ($game) {
-            // Delete the game
-            $result = $wpdb->delete(
-                $table_name,
-                array('bgg_id' => $bgg_id),
-                array('%d')
-            );
-            
-            if ($result) {
-                return array(
-                    'success' => true,
-                    'message' => sprintf('Game "%s" has been deleted successfully.', $game->name)
-                );
-            } else {
-                return array(
-                    'success' => false,
-                    'message' => 'Error deleting game: ' . $wpdb->last_error
-                );
-            }
-        } else {
-            return array(
-                'success' => false,
-                'message' => sprintf('Game with ID %d not found.', $bgg_id)
-            );
-        }
+        // Call the render function
+        bgm_render_add_remove_page($search_results, $result);
     }
     
     /**
@@ -443,6 +400,70 @@ class BGM_Admin {
             ));
         }
     }
+
+        /**
+     * AJAX handler for deleting a game
+     */
+    public function ajax_delete_game() {
+        // Parse the form data
+        parse_str($_POST['formData'], $data);
+        
+        // Verify nonce
+        if (!isset($data['bgm_delete_nonce']) || !wp_verify_nonce($data['bgm_delete_nonce'], 'bgm_delete_game')) {
+            wp_send_json(array(
+                'success' => false,
+                'message' => 'Security check failed.'
+            ));
+            return;
+        }
+        
+        // Get game ID
+        $game_id = isset($data['game_id']) ? intval($data['game_id']) : 0;
+        
+        if ($game_id <= 0) {
+            wp_send_json(array(
+                'success' => false,
+                'message' => 'Invalid game ID.'
+            ));
+            return;
+        }
+        
+        // Delete the game
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'bgm_games';
+        
+        // Get the game name first for confirmation message
+        $game = $wpdb->get_row($wpdb->prepare("SELECT id, name, bgg_id FROM $table_name WHERE bgg_id = %d", $game_id));
+        
+        if (!$game) {
+            wp_send_json(array(
+                'success' => false,
+                'message' => 'Game not found.'
+            ));
+            return;
+        }
+        
+        // Delete the game
+        $result = $wpdb->delete(
+            $table_name,
+            array('bgg_id' => $game_id),
+            array('%d')
+        );
+        
+        if ($result) {
+            wp_send_json(array(
+                'success' => true,
+                'message' => sprintf('Game "%s" has been deleted successfully.', $game->name),
+                'game_id' => $game->id
+            ));
+        } else {
+            wp_send_json(array(
+                'success' => false,
+                'message' => 'Error deleting game: ' . $wpdb->last_error
+            ));
+        }
+    }
+
 }
 
 // Initialize the admin

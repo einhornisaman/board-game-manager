@@ -26,8 +26,8 @@ function bgm_render_admin_page() {
     ?>
 
     <div class="wrap">
-        <h1>Board Game Manager</h1>
-        <p>Manage your board game collection here.</p>
+        <h1>Master Game List</h1>
+        <p>Manage List Here.</p>
         
         <div class="tablenav top">
             <div class="alignleft actions">
@@ -153,7 +153,7 @@ function bgm_render_admin_page() {
                 <div class="form-row">
                     <div class="form-field">
                         <label for="edit_complexity">Complexity (1-5):</label>
-                        <input type="number" id="edit_complexity" name="complexity" min="1" max="5" step="0.1">
+                        <input type="number" id="edit_complexity" name="complexity" min="1" max="5" step="0.01">
                     </div>
                     <div class="form-field">
                         <label for="edit_rating">Rating (1-10):</label>

@@ -1,0 +1,614 @@
+<?php
+/**
+ * Plugin Name: Board Game Manager
+ * Description: Manage and display board game collections for cafes
+ * Version: 1.0.0
+ * Author: Your Name
+ * Text Domain: board-game-manager
+ */
+
+// If this file is called directly, abort.
+if (!defined('WPINC')) {
+    die;
+}
+
+// Define plugin constants
+define('BGM_VERSION', '1.0.0');
+define('BGM_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('BGM_PLUGIN_URL', plugin_dir_url(__FILE__));
+
+/**
+ * Plugin Activation
+ */
+function bgm_activate() {
+    global $wpdb;
+    $charset_collate = $wpdb->get_charset_collate();
+    
+    // Define table name
+    $games_table = $wpdb->prefix . 'bgm_games';
+    
+    // Include WordPress database upgrade functions
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    
+    // Create games table
+    $sql = "CREATE TABLE $games_table (
+        `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        `name` varchar(255) NOT NULL,
+        `thumb` varchar(255) DEFAULT NULL,
+        `minplayers` int(11) DEFAULT NULL,
+        `maxplayers` int(11) DEFAULT NULL,
+        `minplaytime` int(11) DEFAULT NULL,
+        `maxplaytime` int(11) DEFAULT NULL,
+        `complexity` decimal(3,2) DEFAULT NULL,
+        `gamecats` text DEFAULT NULL,
+        `gamemechs` text DEFAULT NULL,
+        `bgglink` varchar(255) DEFAULT NULL,
+        `rating` decimal(3,1) DEFAULT NULL,
+        `qty` int(11) DEFAULT 1,
+        `qtyrented` int(11) DEFAULT 0,
+        `bgg_id` int(11) DEFAULT NULL,
+        `description` text DEFAULT NULL,
+        `year_published` int(11) DEFAULT NULL,
+        `publisher` varchar(255) DEFAULT NULL,
+        `designer` varchar(255) DEFAULT NULL,
+        `date_added` datetime DEFAULT CURRENT_TIMESTAMP,
+        `last_updated` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        `added_by` bigint(20) UNSIGNED DEFAULT NULL,
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `bgg_id` (`bgg_id`)
+    ) $charset_collate;";
+    
+    dbDelta($sql);
+}
+register_activation_hook(__FILE__, 'bgm_activate');
+
+/**
+ * Import a game from BoardGameGeek API and save to database
+ */
+function bgm_import_game_from_bgg($bgg_id) {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'bgm_games';
+    
+    // Check if game already exists
+    $existing = $wpdb->get_var($wpdb->prepare("SELECT id FROM $table_name WHERE bgg_id = %d", $bgg_id));
+    
+    // Simple API call with basic error handling
+    $url = 'https://boardgamegeek.com/xmlapi2/thing?stats=1&id=' . $bgg_id;
+    $response = wp_remote_get($url);
+    
+    if (is_wp_error($response)) {
+        return [
+            'success' => false,
+            'message' => "Failed to connect to BGG API: " . $response->get_error_message()
+        ];
+    }
+    
+    $body = wp_remote_retrieve_body($response);
+    
+    // Process XML
+    libxml_use_internal_errors(true);
+    $xml = simplexml_load_string($body);
+    
+    if ($xml === false) {
+        return [
+            'success' => false,
+            'message' => "Failed to parse BGG API response."
+        ];
+    }
+    
+    // Extract basic game data
+    try {
+        $id = (string)$xml->item->attributes()->id;
+        $name = (string)$xml->item->name[0]->attributes()->value;
+        $thumbnail = (string)$xml->item->thumbnail;
+        $minplayers = (string)$xml->item->minplayers['value'];
+        $maxplayers = (string)$xml->item->maxplayers['value'];
+        $minplaytime = (string)$xml->item->minplaytime['value'];
+        $maxplaytime = (string)$xml->item->maxplaytime['value'];
+        $complexity = (string)$xml->item->statistics->ratings->averageweight['value'];
+        $rating = (string)$xml->item->statistics->ratings->average['value'];
+        $bgglink = 'https://boardgamegeek.com/boardgame/' . $id;
+        $description = (string)$xml->item->description;
+        $year_published = isset($xml->item->yearpublished['value']) ? (string)$xml->item->yearpublished['value'] : null;
+        
+        // Extract categories and mechanics
+        $catNames = "";
+        $mechNames = "";
+        $publisher = "";
+        $designer = "";
+        
+        foreach ($xml->item->link as $link) {
+            if ((string)$link->attributes()->type == "boardgamecategory") {
+                $catNames .= (string)$link->attributes()->value . ", ";
+            } elseif ((string)$link->attributes()->type == "boardgamemechanic") {
+                $mechNames .= (string)$link->attributes()->value . ", ";
+            } elseif ((string)$link->attributes()->type == "boardgamepublisher") {
+                $publisher .= (string)$link->attributes()->value . ", ";
+            } elseif ((string)$link->attributes()->type == "boardgamedesigner") {
+                $designer .= (string)$link->attributes()->value . ", ";
+            }
+        }
+
+        // Remove the trailing ", " from the fields
+        $catNames = rtrim($catNames, ", ");
+        $mechNames = rtrim($mechNames, ", ");
+        $publisher = rtrim($publisher, ", ");
+        $designer = rtrim($designer, ", ");
+        
+        // Get current user ID
+        $user_id = get_current_user_id();
+        
+        // Insert or update the game in database
+        if ($existing) {
+            // Update existing game
+            $result = $wpdb->update(
+                $table_name,
+                [
+                    'name' => $name,
+                    'thumb' => $thumbnail,
+                    'minplayers' => $minplayers,
+                    'maxplayers' => $maxplayers,
+                    'minplaytime' => $minplaytime,
+                    'maxplaytime' => $maxplaytime,
+                    'complexity' => $complexity,
+                    'gamecats' => $catNames,
+                    'gamemechs' => $mechNames,
+                    'bgglink' => $bgglink,
+                    'rating' => $rating,
+                    'bgg_id' => $id,
+                    'description' => $description,
+                    'year_published' => $year_published,
+                    'publisher' => $publisher,
+                    'designer' => $designer,
+                    'last_updated' => current_time('mysql')
+                ],
+                ['id' => $existing]
+            );
+            
+            if ($result === false) {
+                return [
+                    'success' => false,
+                    'message' => "Database error: " . $wpdb->last_error
+                ];
+            }
+            
+            $action = "updated";
+            
+        } else {
+            // Insert new game
+            $result = $wpdb->insert(
+                $table_name,
+                [
+                    'name' => $name,
+                    'thumb' => $thumbnail,
+                    'minplayers' => $minplayers,
+                    'maxplayers' => $maxplayers,
+                    'minplaytime' => $minplaytime,
+                    'maxplaytime' => $maxplaytime,
+                    'complexity' => $complexity,
+                    'gamecats' => $catNames,
+                    'gamemechs' => $mechNames,
+                    'bgglink' => $bgglink,
+                    'rating' => $rating,
+                    'qty' => 1,
+                    'qtyrented' => 0,
+                    'bgg_id' => $id,
+                    'description' => $description,
+                    'year_published' => $year_published,
+                    'publisher' => $publisher,
+                    'designer' => $designer,
+                    'date_added' => current_time('mysql'),
+                    'last_updated' => current_time('mysql'),
+                    'added_by' => $user_id
+                ]
+            );
+            
+            if ($result === false) {
+                return [
+                    'success' => false,
+                    'message' => "Database error: " . $wpdb->last_error
+                ];
+            }
+            
+            $action = "added";
+        }
+        
+        return [
+            'success' => true,
+            'action' => $action,
+            'id' => $id,
+            'name' => $name,
+            'thumbnail' => $thumbnail,
+            'minplayers' => $minplayers,
+            'maxplayers' => $maxplayers,
+            'minplaytime' => $minplaytime,
+            'maxplaytime' => $maxplaytime,
+            'complexity' => $complexity,
+            'rating' => $rating,
+            'catNames' => $catNames,
+            'mechNames' => $mechNames,
+            'bgglink' => $bgglink,
+            'description' => substr($description, 0, 100) . (strlen($description) > 100 ? '...' : ''),
+            'year_published' => $year_published,
+            'publisher' => $publisher,
+            'designer' => $designer
+        ];
+    } catch (Exception $e) {
+        return [
+            'success' => false,
+            'message' => "Error processing game data: " . $e->getMessage()
+        ];
+    }
+}
+
+/**
+ * Admin Menu Setup
+ */
+function bgm_admin_menu() {
+    add_menu_page(
+        'Board Game Manager',
+        'Board Games',
+        'manage_options',
+        'board-game-manager',
+        'bgm_admin_page',
+        'dashicons-games',
+        30
+    );
+    
+    add_submenu_page(
+        'board-game-manager',
+        'Import Game',
+        'Import Game',
+        'manage_options',
+        'bgm-import',
+        'bgm_import_page'
+    );
+}
+add_action('admin_menu', 'bgm_admin_menu');
+
+/**
+ * Admin Page
+ */
+function bgm_admin_page() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'bgm_games';
+    $games = $wpdb->get_results("SELECT * FROM $table_name ORDER BY name ASC", ARRAY_A);
+    ?>
+    <div class="wrap">
+        <h1>Board Game Manager</h1>
+        <p>Manage your board game collection here.</p>
+        
+        <?php if (empty($games)) : ?>
+            <div class="notice notice-info">
+                <p>No games found in your collection. <a href="<?php echo admin_url('admin.php?page=bgm-import'); ?>">Import games</a> to get started.</p>
+            </div>
+        <?php else : ?>
+            <a href="<?php echo admin_url('admin.php?page=bgm-import'); ?>" class="button button-primary" style="margin-bottom: 15px;">Import More Games</a>
+            
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th>Image</th>
+                        <th>Name</th>
+                        <th>Players</th>
+                        <th>Playtime</th>
+                        <th>Year</th>
+                        <th>Publisher</th>
+                        <th>Rating</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($games as $game) : ?>
+                        <tr>
+                            <td><img src="<?php echo esc_url($game['thumb']); ?>" height="50" alt=""></td>
+                            <td><?php echo esc_html($game['name']); ?></td>
+                            <td><?php echo esc_html($game['minplayers'] . '-' . $game['maxplayers']); ?></td>
+                            <td><?php echo esc_html($game['minplaytime'] . '-' . $game['maxplaytime']); ?></td>
+                            <td><?php echo esc_html($game['year_published']); ?></td>
+                            <td><?php echo esc_html($game['publisher']); ?></td>
+                            <td><?php echo esc_html($game['rating']); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </div>
+    <?php
+}
+
+/**
+ * Import Page
+ */
+function bgm_import_page() {
+    // Process form if submitted
+    if (isset($_POST['bgg_id']) && !empty($_POST['bgg_id'])) {
+        $bgg_id = intval($_POST['bgg_id']);
+        $result = bgm_import_game_from_bgg($bgg_id);
+        
+        if ($result['success']) {
+            echo '<div class="notice notice-success"><p>Game "' . esc_html($result['name']) . '" ' . esc_html($result['action']) . ' successfully!</p>';
+            echo '<div style="margin-top: 15px;">';
+            echo '<strong>Details:</strong><br>';
+            echo 'Year: ' . esc_html($result['year_published']) . '<br>';
+            echo 'Publisher: ' . esc_html($result['publisher']) . '<br>';
+            echo 'Designer: ' . esc_html($result['designer']) . '<br>';
+            echo '</div>';
+            echo '</div>';
+        } else {
+            echo '<div class="notice notice-error"><p>Error: ' . esc_html($result['message']) . '</p></div>';
+        }
+    }
+    ?>
+    <div class="wrap">
+        <h1>Import Game</h1>
+        <p>Enter a BoardGameGeek ID to import a game.</p>
+        
+        <form method="post" style="margin-bottom: 30px;">
+            <input type="number" name="bgg_id" placeholder="BGG ID (e.g. 174430)" required>
+            <button type="submit" class="button button-primary">Import Game</button>
+        </form>
+        
+        <p>Examples of popular games:</p>
+        <ul>
+            <li>Catan: 13</li>
+            <li>Ticket to Ride: 9209</li>
+            <li>Pandemic: 30549</li>
+            <li>7 Wonders: 68448</li>
+            <li>Azul: 230802</li>
+        </ul>
+    </div>
+    <?php
+}
+
+/**
+ * Shortcode for displaying games
+ */
+function bgm_shortcode() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'bgm_games';
+    $games = $wpdb->get_results("SELECT * FROM $table_name ORDER BY name ASC", ARRAY_A);
+    
+    ob_start();
+    
+    if (empty($games)) {
+        echo '<p>No games found in the collection.</p>';
+    } else {
+        echo '<div class="bgm-games-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;">';
+        
+        foreach ($games as $game) {
+            echo '<div class="bgm-game-card" style="border: 1px solid #ddd; border-radius: 5px; padding: 10px; text-align: center;">';
+            echo '<img src="' . esc_url($game['thumb']) . '" style="height: 100px; margin-bottom: 10px;" alt="' . esc_attr($game['name']) . '">';
+            echo '<h3 style="margin: 0 0 5px; font-size: 16px;">' . esc_html($game['name']) . '</h3>';
+            echo '<p style="margin: 0; font-size: 14px;">' . esc_html($game['minplayers'] . '-' . $game['maxplayers']) . ' players | ' . esc_html($game['minplaytime'] . '-' . $game['maxplaytime']) . ' min</p>';
+            if (!empty($game['year_published'])) {
+                echo '<p style="margin: 5px 0 0; font-size: 12px;">(' . esc_html($game['year_published']) . ')</p>';
+            }
+            echo '</div>';
+        }
+        
+        echo '</div>';
+    }
+    
+    return ob_get_clean();
+}
+add_shortcode('board_game_collection', 'bgm_shortcode');
+
+/**
+ * Create a folder for JavaScript files if it doesn't exist
+ */
+function bgm_create_js_folder() {
+    $js_dir = BGM_PLUGIN_DIR . 'js';
+    if (!file_exists($js_dir)) {
+        mkdir($js_dir, 0755, true);
+    }
+}
+
+/**
+ * Create the filters.js file
+ */
+function bgm_create_js_files() {
+    bgm_create_js_folder();
+    
+    $filters_js_path = BGM_PLUGIN_DIR . 'js/filters.js';
+    
+    if (!file_exists($filters_js_path)) {
+        $filters_js_content = <<<'EOT'
+// Board Game Manager filters script
+jQuery(document).ready(function($) {
+    // Define custom search functions first
+    $.fn.dataTable.ext.search = []; // Clear any existing search functions
+    
+    $.fn.dataTable.ext.search.push(
+        // Game Time Filter
+        function (settings, data, dataIndex) {
+            var iMin = parseInt($('#min').val(), 10);
+            var iMax = parseInt($('#max').val(), 10);
+        
+            // Default values if input is empty or invalid
+            iMin = isNaN(iMin) ? 0 : iMin;
+            iMax = isNaN(iMax) ? 9999 : iMax;
+        
+            var minTime = parseInt(data[4], 10);
+            var maxTime = parseInt(data[5], 10);
+        
+            // Default values for games with missing/invalid time data
+            minTime = isNaN(minTime) ? 0 : minTime;
+            if (isNaN(maxTime) || maxTime === 0) {
+                maxTime = minTime; // If maxTime is 0 or missing, set it to minTime
+            }
+        
+            // The game should be included if:
+            // - Its min time is at least the selected min time
+            // - Its max time does not exceed the selected max time
+            if (minTime >= iMin && maxTime <= iMax) {
+                return true;
+            }
+        
+            return false;
+        },
+        
+        // Player Count Filter
+        function(settings, data, dataIndex) {
+            var selectedPlayerCount = $('#filterPlayerCount').val();
+            var minPlayers = parseInt(data[2], 10) || 0;
+            var maxPlayers = parseInt(data[3], 10) || 0;
+        
+            if (!selectedPlayerCount || selectedPlayerCount === "") {
+                return true;
+            }
+        
+            if (selectedPlayerCount === "999") {
+                return minPlayers === 2 && maxPlayers === 2;
+            }
+        
+            selectedPlayerCount = parseInt(selectedPlayerCount, 10);
+            return minPlayers <= selectedPlayerCount && maxPlayers >= selectedPlayerCount;
+        },
+
+        // Complexity Filter
+        function (settings, data, dataIndex) {
+            var complexityMin = parseFloat($('#complexityMin').val()) || 0;
+            var complexityMax = parseFloat($('#complexityMax').val()) || 9999;
+            var complexity = parseFloat(data[6]) || 0;
+
+            if (complexityMin === 0 && complexityMax === 9999) {
+                return true;
+            }
+            
+            return (complexity >= complexityMin && complexity <= complexityMax);
+        }
+    );
+
+    // Initialize DataTable
+    var table = $('.mydatatable').DataTable({
+        "language": {
+            "infoFiltered": " of _MAX_"
+        },
+        "paging": true,
+        "pagingType": $(window).width() < 768 ? "simple_numbers" : "simple_numbers",
+        "processing": true,
+        "responsive": true,
+        "order": [[10, "desc"]],
+        "initComplete": function(settings, json) {
+            $('.wrapper').removeClass('loading');
+        },
+        "columnDefs": [
+            { responsivePriority: 1, targets: 0 },
+            { responsivePriority: 2, targets: 1 },
+            { type: 'accent-neutralise', targets: 1 }
+        ],
+        "drawCallback": function(settings) {
+            // Only scroll to top if the draw was triggered by pagination
+            if (settings.iDraw > 1 && settings._iDisplayStart !== settings._iDisplayStart_) {
+                window.scrollTo(0, 0); // Scroll to the top only on pagination change
+            }
+            // Store the current display start for future comparison
+            settings._iDisplayStart_ = settings._iDisplayStart;
+        }
+    });
+
+    // Player Count filter
+    $('#filterPlayerCount').on('change', function() {
+        table.draw();
+    });
+
+    // Complexity filter
+    $('#filterComplexity').on('change', function() {
+        switch($(this).val()) {
+            case '1':
+                $('#complexityMin').val('0');
+                $('#complexityMax').val('1.49');
+                break;
+            case '2':
+                $('#complexityMin').val('1.5');
+                $('#complexityMax').val('1.99');
+                break;
+            case '3':
+                $('#complexityMin').val('2');
+                $('#complexityMax').val('2.49');
+                break;
+            case '4':
+                $('#complexityMin').val('2.5');
+                $('#complexityMax').val('2.99');
+                break;
+            case '5':
+                $('#complexityMin').val('3');
+                $('#complexityMax').val('3.49');
+                break;
+            case '6':
+                $('#complexityMin').val('3.5');
+                $('#complexityMax').val('5');
+                break;
+            default:
+                $('#complexityMin').val('0');
+                $('#complexityMax').val('9999');
+                break;
+        }
+        table.draw();
+    });
+
+    // Game Time filter
+    $('#filterGameTime').on('change', function() {
+        switch($(this).val()) {
+            case '1':
+                $('#min').val('0');
+                $('#max').val('15');
+                break;
+            case '2':
+                $('#min').val('15');
+                $('#max').val('30');
+                break;
+            case '3':
+                $('#min').val('30');
+                $('#max').val('60');
+                break;
+            case '4':
+                $('#min').val('60');
+                $('#max').val('120');
+                break;
+            case '5':
+                $('#min').val('120');
+                $('#max').val('9999');
+                break;
+            default:
+                $('#min').val('0');
+                $('#max').val('9999');
+                break;
+        }
+        table.draw();
+    });
+
+    // Category filter
+    $('#filterCategory').on('change', function() {
+        table.column(7).search($(this).val()).draw();
+    });
+
+    // Mechanic filter
+    $('#filterMechanic').on('change', function() {
+        table.column(8).search($(this).val()).draw();
+    });
+
+    // Reset all filters
+    $('#resetFilters').on('click', function() {
+        // Reset all select dropdowns
+        $('#filterPlayerCount, #filterComplexity, #filterGameTime, #filterCategory, #filterMechanic').val('');
+        
+        // Reset hidden range values
+        $('#min, #complexityMin').val('0');
+        $('#max, #complexityMax').val('9999');
+        
+        // Clear all column searches and redraw
+        table.search('').columns().search('').draw();
+
+        // Reset sorting to default (remove any active sorting)
+        table.order([10, 'desc']).draw();
+    });
+});
+EOT;
+        
+        file_put_contents($filters_js_path, $filters_js_content);
+    }
+}
+
+// Create necessary files on plugin activation
+register_activation_hook(__FILE__, 'bgm_create_js_files');

@@ -1,0 +1,251 @@
+.game {
+  text-align: center;
+}
+.game td {
+  vertical-align: middle;
+}
+.game img {
+  display: block;
+  margin: 0 auto;
+  max-width: 120px;
+  object-fit: contain;
+}
+.game__name {
+  white-space: pre-wrap !important;
+}
+.div.dataTables_processing { 
+z-index: 1; 
+}
+.wrapper {
+  position: relative;
+}
+
+/* .loading:before {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0px;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 100;
+  background: white top center no-repeat url('https://media.giphy.com/media/PUYgk3wpNk0WA/giphy.gif');
+} */
+
+
+
+
+table.dataTable.dtr-inline.collapsed > tbody > tr > td.dtr-control:before {
+  display: none !important;
+}
+@media screen {
+  table.dataTable.dtr-inline.collapsed > tbody > tr > td.dtr-control:before {
+    display: none !important;
+  }
+}
+
+.dtr-details { 
+  white-space: normal !important;  /* Allows text to wrap */
+  word-wrap: break-word !important; /* Ensures long words wrap */
+  overflow-wrap: break-word !important; /* Alternative for word wrapping */
+  max-width: 100%; /* Prevents it from extending too far */
+  font-size: 14px !important; /* Adjust size as needed */
+}
+
+.dtr-details * {
+  font-size: 14px !important; /* Ensures all table data inside hidden columns is the same size */
+}
+
+.form-select {
+  -webkit-appearance: none !important; /* Remove default Chrome styling */
+  appearance: none !important; /* General appearance reset */
+  display: inline !important;
+}
+
+@media (max-width: 576px) {
+  .form-select {
+    display: inline !important;
+    width: 100% !important;
+  }
+}
+
+/* Change default form field border color */
+.form-control, .form-select {
+  border-color: #47D7AC !important;
+}
+
+/* Change border color when an input is focused */
+.form-control:focus, .form-select:focus {
+  border-color: #47D7AC !important;
+  box-shadow: 0 0 5px rgba(71, 215, 172, 0.5) !important;
+}
+
+/* Change the border color and text color of reset button */
+.btn-outline-primary {
+  color: #000000 !important; /* Text color */
+  border-color: #000000 !important; /* Border color */
+}
+
+/* Change hover styles of reset button */
+.btn-outline-primary:hover {
+  background-color: #47D7AC !important; /* Background on hover */
+  color: white !important; /* Text color on hover */
+  border-color: #3ac09c !important; /* Slightly darker border */
+}
+
+/* Change active (clicked) styles of reset button */
+.btn-outline-primary:active, 
+.btn-outline-primary:focus {
+  background-color: #35b08d !important; /* Even darker shade */
+  color: white !important;
+  border-color: #35b08d !important;
+  box-shadow: 0 0 5px rgba(71, 215, 172, 0.5) !important;
+}
+
+/* Pagination Arrows (Previous / Next) */
+.dt-paging-button.page-item .page-link.previous,
+.dt-paging-button.page-item .page-link.next {
+    background-color: transparent !important;
+    border: 1px solid black !important; /* Black border */
+    color: black !important; /* Black text color */
+}
+
+/* Hover for Pagination Arrows */
+.dt-paging-button.page-item .page-link.previous:hover,
+.dt-paging-button.page-item .page-link.next:hover {
+    background-color: #47D7AC !important; /* Green background on hover */
+    color: white !important; /* White text on hover */
+    border-color: #3ac09c !important; /* Darker green border */
+}
+
+/* Active Pagination Number (Currently Selected) */
+.dt-paging-button.page-item.active .page-link {
+    background-color: #47D7AC !important; /* Green background */
+    color: white !important; /* White text */
+    border-color: #47D7AC !important; /* Green border */
+}
+
+/* Regular Pagination Numbers */
+.dt-paging-button.page-item .page-link {
+    background-color: transparent !important; /* Transparent background */
+    border: 1px solid black !important; /* Black border */
+    color: black !important; /* Black text color */
+}
+
+/* Hover for Pagination Numbers */
+.dt-paging-button.page-item .page-link:hover {
+    background-color: #47D7AC !important; /* Green background on hover */
+    color: white !important; /* White text on hover */
+    border-color: #3ac09c !important; /* Darker green border */
+}
+
+/* Disabled Pagination Button (Previous / Next) */
+.dt-paging-button.page-item.disabled .page-link {
+    background-color: transparent !important;
+    border-color: #dcdcdc !important; /* Light border for disabled state */
+    color: #dcdcdc !important; /* Light gray text for disabled state */
+}
+
+/* Add focus styles for accessibility */
+.dt-paging-button.page-item .page-link:focus {
+    outline: none !important;
+    box-shadow: 0 0 5px rgba(71, 215, 172, 0.5) !important;
+}
+
+/* entries per page select element width control For mobile screens */
+@media (max-width: 768px) {
+  .dataTables_length select {
+      width: auto !important; /* Ensure it's still as wide as needed on smaller screens */
+      /* display: block; To prevent full-width display */
+  }
+}
+
+#dt-length {
+  display: flex !important;      /* Ensure the select element itself behaves as block */
+  flex-direction: row;  /* Ensure horizontal alignment */
+  width: auto !important;         /* Set width based on content */
+  max-width: none !important;     /* Remove any max-width constraints */
+  margin: 0 auto !important;      /* Center the select if necessary */
+}
+
+/* General styling for the entries per page dropdown */
+#dt-length-0 {
+  width: auto;  /* Adjust width based on content */
+}
+
+/* On mobile screens, adjust the width of the select dropdown */
+@media (max-width: 768px) {
+  #dt-length-0 {
+    width: 75px !important;  /* Set a specific width for mobile */
+    max-width: 75px !important;
+    display: inline-flex !important;
+  }
+}
+
+@media (max-width: 576px) {
+  .dataTables_length select.form-select {
+    width: 75px !important;
+    max-width: 75px !important;
+    display: inline-flex !important;
+  }
+}
+
+/* table load wait */
+
+.loading-message {
+  font-size: 18px; /* Adjust size as needed */
+  font-family: Arial, sans-serif;
+  display: inline-block;
+  text-align: center;
+}
+
+.dots::after {
+  content: '';
+  display: inline-block;
+  animation: dot-anim 1.5s steps(3, end) infinite;
+}
+
+@keyframes dot-anim {
+  0% {
+      content: '.';
+  }
+  33% {
+      content: '..';
+  }
+  66% {
+      content: '...';
+  }
+  100% {
+      content: '.';
+  }
+}
+
+.loading-row {
+  text-align: center;
+}
+
+.mydatatable.loading tbody {
+  display: none;
+}
+
+.mydatatable.loaded tbody {
+  display: block;
+}
+
+.mydatatable.loading .loading-message {
+  display: inline-block;
+}
+
+/* Force the select dropdown width to be controlled by content */
+.dataTables_length {
+    display: flex !important;      /* Ensure the parent container does not impose inline styles */
+    flex-direction: row;  /* Ensure horizontal alignment */
+}
+.dataTables_length select {
+    display: flex !important;      /* Overriding inline or inline-block */
+    width: auto !important;         /* Allow content-based width */
+    max-width: none !important;     /* Remove any max-width constraints */
+    padding-right: 20px !important;    /* Optional: adjust padding to prevent horizontal scroll */
+}

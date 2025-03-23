@@ -36,8 +36,8 @@ class BGM_Admin {
             'Add Games',
             'Add Games',
             'manage_options',
-            'bgm-add-remove',
-            array($this, 'add_remove_page')
+            'bgm-add-games',
+            array($this, 'add_game_page')
         );
     }
     
@@ -82,7 +82,7 @@ class BGM_Admin {
         /**
      * Display add games page
      */
-    public function add_remove_page() {
+    public function add_game_page() {
         // Process BGG search if form submitted
         $search_results = array();
         $result = array();
@@ -99,10 +99,10 @@ class BGM_Admin {
         }
         
         // Include the view file
-        require_once BGM_PLUGIN_DIR . 'admin/views/add-remove-page.php';
+        require_once BGM_PLUGIN_DIR . 'admin/views/add-game-page.php';
         
         // Call the render function
-        bgm_render_add_remove_page($search_results, $result);
+        bgm_render_add_game_page($search_results, $result);
     }
     
     /**

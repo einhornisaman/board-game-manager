@@ -10,7 +10,7 @@ if (!defined('WPINC')) {
  * @param array $search_results BGG search results if available
  * @param array $result Game import result if available
  */
-function bgm_render_add_remove_page($search_results = array(), $result = array()) {
+function bgm_render_add_game_page($search_results = array(), $result = array()) {
     ?>
     <div class="wrap">
         <h1>Add Games</h1>

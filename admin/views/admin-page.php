@@ -31,7 +31,7 @@ function bgm_render_admin_page() {
         
         <div class="tablenav top">
             <div class="alignleft actions">
-                <a href="<?php echo admin_url('admin.php?page=bgm-add-remove'); ?>" class="button button-primary">Add/Remove Games</a>
+                <a href="<?php echo admin_url('admin.php?page=bgm-add-games'); ?>" class="button button-primary">Add Games</a>
             </div>
             
             <div class="alignright">

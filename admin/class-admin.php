@@ -17,27 +17,38 @@ class BGM_Admin {
         add_action('wp_ajax_bgm_delete_game_ajax', array($this, 'ajax_delete_game'));
     }
     
-    /**
+        /**
      * Register admin menu items
      */
     public function register_menu() {
         add_menu_page(
-            'Board Game Manager',
-            'Board Games',
+            'Game Lists',             // Changed page title
+            'Game Lists',             // Changed menu title (the blue section)
             'manage_options',
-            'board-game-manager',
+            'board-game-manager',     // Keep this slug the same
             array($this, 'admin_page'),
             'dashicons-games',
             30
         );
         
+        // Add the Master Game List as first submenu to replace the default
+        add_submenu_page(
+            'board-game-manager',
+            'Master Game List',       // Changed page title
+            'Master Game List',       // Changed submenu title (right under the blue section)
+            'manage_options',
+            'board-game-manager',     // Same as parent slug
+            array($this, 'admin_page')
+        );
+        
+        // Add Games submenu (keep this as is)
         add_submenu_page(
             'board-game-manager',
             'Add Games',
             'Add Games',
             'manage_options',
-            'bgm-add-games',
-            array($this, 'add_game_page')
+            'bgm-add-games',          // If you've changed this from bgm-add-remove
+            array($this, 'add_game_page')  // If you've changed this from add_remove_page
         );
     }
     

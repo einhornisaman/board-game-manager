@@ -116,121 +116,205 @@ class BGM_Admin {
         bgm_render_add_game_page($search_results, $result);
     }
     
-    /**
-     * Search BGG for games
-     */
-    private function search_bgg_games($search_term) {
-        $search_term = urlencode($search_term);
-        $search_url = "https://boardgamegeek.com/xmlapi2/search?type=boardgame,boardgameexpansion&query=$search_term";
-        
-        $response = wp_remote_get($search_url);
-        
-        if (is_wp_error($response)) {
-            return array(
-                'success' => false,
-                'message' => 'Failed to connect to BoardGameGeek API: ' . $response->get_error_message()
-            );
-        }
-        
-        $body = wp_remote_retrieve_body($response);
-        
-        // Process XML
-        libxml_use_internal_errors(true);
-        $xml = simplexml_load_string($body);
-        
-        if ($xml === false) {
-            return array(
-                'success' => false,
-                'message' => 'Failed to parse BoardGameGeek API response.'
-            );
-        }
-        
-        $total = (int)$xml['total'];
-        
-        if ($total === 0) {
-            return array(
-                'success' => false,
-                'message' => 'No games found matching your search term.'
-            );
-        }
-        
-        $game_ids = array();
-        $temp_results = array();
-        
-        // First, collect all game IDs and basic info
+/**
+ * Search BGG for games
+ */
+private function search_bgg_games($search_term) {
+    $search_term = urlencode($search_term);
+    
+    // Get selected thing types or default to boardgame
+    $thing_types = isset($_POST['thing_types']) && !empty($_POST['thing_types']) 
+        ? $_POST['thing_types'] 
+        : array('boardgame');
+
+    // Sanitize thing types array
+    $thing_types = array_map('sanitize_text_field', $thing_types);
+
+    // Build type parameter
+    $type_param = implode(',', $thing_types);
+
+    // Build the search URL with just the type parameter
+    $search_url = "https://boardgamegeek.com/xmlapi2/search?query=$search_term&type=$type_param";
+
+    // Debug log the search URL
+    error_log('BGG Search URL: ' . $search_url);
+    
+    $response = wp_remote_get($search_url);
+    
+    if (is_wp_error($response)) {
+        return array(
+            'success' => false,
+            'message' => 'Failed to connect to BoardGameGeek API: ' . $response->get_error_message()
+        );
+    }
+    
+    $body = wp_remote_retrieve_body($response);
+    
+    // Process XML
+    libxml_use_internal_errors(true);
+    $xml = simplexml_load_string($body);
+    
+    // Add debug code to see what types are returned in search results
+    if ($xml !== false) {
+        error_log("DEBUG: Search results structure analysis");
         foreach ($xml->item as $item) {
-            $game_id = (string)$item['id'];
-            $name = "";
+            $id = (string)$item['id'];
+            $type = (string)$item['type'];
             
-            // Find primary name
+            // Get the name
+            $item_name = "";
             foreach ($item->name as $name_node) {
                 if ((string)$name_node['type'] === 'primary') {
-                    $name = (string)$name_node['value'];
+                    $item_name = (string)$name_node['value'];
                     break;
                 }
             }
             
-            // If no primary name found, use the first name
-            if (empty($name) && isset($item->name[0])) {
-                $name = (string)$item->name[0]['value'];
-            }
-            
-            // Year published
-            $year = (isset($item->yearpublished)) ? (string)$item->yearpublished['value'] : 'N/A';
-            
-            // Add to temp results if we have a name
-            if (!empty($name)) {
-                $temp_results[$game_id] = array(
-                    'id' => $game_id,
-                    'name' => $name,
-                    'year' => $year,
-                    'thumbnail' => '' // Will be populated in the next step
-                );
-                
-                $game_ids[] = $game_id;
+            error_log("Item in search results: '$item_name' (ID: $id) - Reported Type: $type");
+        }
+    }
+    
+    if ($xml === false) {
+        return array(
+            'success' => false,
+            'message' => 'Failed to parse BoardGameGeek API response.'
+        );
+    }
+    
+    $total = (int)$xml['total'];
+    
+    if ($total === 0) {
+        return array(
+            'success' => false,
+            'message' => 'No games found matching your search criteria.'
+        );
+    }
+    
+    // First stage: Collect basic info from search results
+    $game_ids = array();
+    $temp_results = array();
+
+    foreach ($xml->item as $item) {
+        $game_id = (string)$item['id'];
+        $name = "";
+        $thing_type = (string)$item['type'];
+        
+        // Find primary name
+        foreach ($item->name as $name_node) {
+            if ((string)$name_node['type'] === 'primary') {
+                $name = (string)$name_node['value'];
+                break;
             }
         }
         
-        // Now, if we have games, fetch their details to get thumbnails
-        if (!empty($game_ids)) {
-            $batch_size = 10;
-            $batches = array_chunk($game_ids, $batch_size);
+        // If no primary name found, use the first name
+        if (empty($name) && isset($item->name[0])) {
+            $name = (string)$item->name[0]['value'];
+        }
+        
+        // Year published
+        $year = (isset($item->yearpublished)) ? (string)$item->yearpublished['value'] : 'N/A';
+        
+        // Add to temp results if we have a name
+        if (!empty($name)) {
+            $temp_results[$game_id] = array(
+                'id' => $game_id,
+                'name' => $name,
+                'year' => $year,
+                'type' => $thing_type,
+                'thumbnail' => '' // Will be populated in the next step
+            );
             
-            foreach ($batches as $batch) {
-                $ids_string = implode(',', $batch);
-                $thing_url = "https://boardgamegeek.com/xmlapi2/thing?id=$ids_string";
+            $game_ids[] = $game_id;
+        }
+    }
+    
+    // Second stage: Get detailed information and apply accurate filtering
+    if (!empty($game_ids)) {
+        $batch_size = 10;
+        $batches = array_chunk($game_ids, $batch_size);
+        $filtered_game_ids = array();
+        
+        foreach ($batches as $batch) {
+            $ids_string = implode(',', $batch);
+            $thing_url = "https://boardgamegeek.com/xmlapi2/thing?id=$ids_string";
+            
+            $thing_response = wp_remote_get($thing_url);
+            
+            if (!is_wp_error($thing_response)) {
+                $thing_body = wp_remote_retrieve_body($thing_response);
+                $thing_xml = simplexml_load_string($thing_body);
                 
-                $thing_response = wp_remote_get($thing_url);
-                
-                if (!is_wp_error($thing_response)) {
-                    $thing_body = wp_remote_retrieve_body($thing_response);
-                    $thing_xml = simplexml_load_string($thing_body);
-                    
-                    if ($thing_xml !== false) {
-                        foreach ($thing_xml->item as $item) {
-                            $id = (string)$item['id'];
-                            $thumbnail = isset($item->thumbnail) ? (string)$item->thumbnail : '';
+                if ($thing_xml !== false) {
+                    foreach ($thing_xml->item as $item) {
+                        $id = (string)$item['id'];
+                        $type = (string)$item['type'];
+                        $name = isset($temp_results[$id]['name']) ? $temp_results[$id]['name'] : '';
+                        
+                        error_log("Full item details: '$name' (ID: $id) - Detailed Type: $type");
+                        
+                        // Apply strict filtering based on the selected types
+                        // If this is an expansion and expansions weren't selected, skip it
+                        if ($type === 'boardgameexpansion' && !in_array('boardgameexpansion', $thing_types)) {
+                            error_log("FILTERING OUT: '$name' - It's an expansion");
+                            unset($temp_results[$id]);
+                            continue;
+                        }
+                        
+                        // If it's an accessory and accessories weren't selected, skip it
+                        if ($type === 'boardgameaccessory' && !in_array('boardgameaccessory', $thing_types)) {
+                            error_log("FILTERING OUT: '$name' - It's an accessory");
+                            unset($temp_results[$id]);
+                            continue;
+                        }
+                        
+                        // If it's an RPG item and RPG items weren't selected, skip it
+                        if ($type === 'rpgitem' && !in_array('rpgitem', $thing_types)) {
+                            error_log("FILTERING OUT: '$name' - It's an RPG item");
+                            unset($temp_results[$id]);
+                            continue;
+                        }
+                        
+                        // If it's a video game and video games weren't selected, skip it
+                        if ($type === 'videogame' && !in_array('videogame', $thing_types)) {
+                            error_log("FILTERING OUT: '$name' - It's a video game");
+                            unset($temp_results[$id]);
+                            continue;
+                        }
+                        
+                        // If we get here, keep this item and update its info
+                        $thumbnail = isset($item->thumbnail) ? (string)$item->thumbnail : '';
+                        if (isset($temp_results[$id])) {
+                            $temp_results[$id]['thumbnail'] = $thumbnail;
+                            $temp_results[$id]['type'] = $type; // Update type with the more accurate one
+                            $filtered_game_ids[] = $id;
                             
-                            if (isset($temp_results[$id])) {
-                                $temp_results[$id]['thumbnail'] = $thumbnail;
-                            }
+                            error_log("KEEPING: '$name' - Type: $type");
                         }
                     }
                 }
             }
         }
         
-        // Format the final results
-        $results = array();
-        foreach ($temp_results as $result) {
-            $results[] = $result;
+        // Only keep games that passed the filtering
+        foreach ($temp_results as $id => $game) {
+            if (!in_array($id, $filtered_game_ids)) {
+                unset($temp_results[$id]);
+            }
         }
-        
-        return array(
-            'success' => true,
-            'games' => $results
-        );
     }
+    
+    // Format the final results
+    $results = array();
+    foreach ($temp_results as $result) {
+        $results[] = $result;
+    }
+    
+    return array(
+        'success' => true,
+        'games' => $results
+    );
+}
     
     /**
      * AJAX handler for real-time game search

@@ -40,7 +40,7 @@ function bgm_render_add_game_page($search_results = array(), $result = array()) 
 
         <div class="bgm-search-section">
         <h2>Search BoardGameGeek</h2>
-        <p>Search for games on BoardGameGeek to add to your collection.</p>
+        <p>Search for games on BoardGameGeek to add to your collection. Results are sorted by BGG rank.</p>
         
         <form method="post" action="" id="bgg-search-form">
             <div class="bgm-thing-filters">
@@ -90,7 +90,7 @@ function bgm_render_add_game_page($search_results = array(), $result = array()) 
                         <p><?php echo esc_html($search_results['message']); ?></p>
                     </div>
                 <?php else : ?>
-                    <p>Found <?php echo count($search_results['games']); ?> games. Click "Import" to add a game to your collection.</p>
+                    <p>Found <?php echo count($search_results['games']); ?> games. Results are sorted by BGG rank. Click "Import" to add a game to your collection.</p>
                     
                     <div class="bgm-search-results">
                         <?php foreach ($search_results['games'] as $game) : ?>
@@ -119,6 +119,15 @@ function bgm_render_add_game_page($search_results = array(), $result = array()) 
                                                     }
                                                     echo esc_html($type_label);
                                                 ?>)
+                                            </span>
+                                        <?php endif; ?>
+                                        <?php if(isset($game['rank']) && $game['rank'] < 999999): ?>
+                                            <span class="bgm-game-rank">
+                                                <strong>BGG Rank:</strong> <?php echo esc_html($game['rank']); ?>
+                                            </span>
+                                        <?php elseif(isset($game['rank'])): ?>
+                                            <span class="bgm-game-rank">
+                                                <strong>BGG Rank:</strong> Unranked
                                             </span>
                                         <?php endif; ?>
                                     </p>
@@ -184,10 +193,18 @@ function bgm_render_add_game_page($search_results = array(), $result = array()) 
         margin-bottom: 5px;
     }
 
-    .bgm-game-year {
+    .bgm-game-meta {
         color: #666;
         margin-top: 0;
         margin-bottom: 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .bgm-game-rank {
+        color: #d94e4e;
+        font-size: 0.9em;
     }
 
     .bgm-game-info form {
@@ -205,31 +222,13 @@ function bgm_render_add_game_page($search_results = array(), $result = array()) 
                 }
             });
             
-            // Make sure the form submits correctly
-            $('form').on('submit', function() {
-                console.log('Form submitted');
+            // Show loading indicator when form is submitted
+            $('#bgg-search-form').on('submit', function() {
+                $('#search-button').prop('disabled', true).val('Searching...');
+                $('#search-loading').show();
                 return true; // Allow form submission to proceed
             });
         });
-    </script>
-
-    <script type="text/javascript">
-    jQuery(document).ready(function($) {
-        // Ensure at least one checkbox is checked
-        $('.bgm-thing-filters input[type="checkbox"]').on('change', function() {
-            if ($('.bgm-thing-filters input[type="checkbox"]:checked').length === 0) {
-                $(this).prop('checked', true);
-                alert('At least one type must be selected.');
-            }
-        });
-        
-        // Show loading indicator when form is submitted
-        $('#bgg-search-form').on('submit', function() {
-            $('#search-button').prop('disabled', true).val('Searching...');
-            $('#search-loading').show();
-            return true; // Allow form submission to proceed
-        });
-    });
     </script>
     <?php
 }

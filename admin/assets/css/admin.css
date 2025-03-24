@@ -201,3 +201,27 @@
     color: #2271b1;
     font-size: 16px;
 }
+
+/* BGG rank styling */
+.bgm-game-rank {
+    color: #d94e4e;
+    font-size: 0.9em;
+    margin-top: 5px;
+    display: block;
+}
+
+.bgm-game-rank strong {
+    font-weight: 600;
+}
+
+/* Adjust the game meta info for better spacing */
+.bgm-game-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 15px;
+}
+
+.bgm-game-meta > span {
+    display: block;
+}

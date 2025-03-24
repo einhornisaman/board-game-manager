@@ -180,3 +180,24 @@
     color: #2271b1;
     font-style: italic;
 }
+
+/* Stats bar styling */
+.bgm-stats-bar {
+    margin: 15px 0;
+    padding: 10px 15px;
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    color: #333;
+    display: flex;
+    align-items: center;
+}
+
+.bgm-total-games {
+    font-size: 15px;
+}
+
+.bgm-total-games strong {
+    color: #2271b1;
+    font-size: 16px;
+}

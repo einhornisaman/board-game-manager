@@ -43,6 +43,7 @@ function bgm_render_add_game_page($search_results = array(), $result = array()) 
         <p>Search for games on BoardGameGeek to add to your collection. Results are sorted by BGG rank.</p>
         
         <form method="post" action="" id="bgg-search-form">
+        <?php wp_nonce_field('bgm_edit_game_nonce', 'bgm_edit_game_nonce'); ?>
             <div class="bgm-thing-filters">
                 <p style="margin-top: 0;"><strong>Filter by type:</strong></p>
                 <label>
@@ -72,9 +73,17 @@ function bgm_render_add_game_page($search_results = array(), $result = array()) 
                 </label>
             </div>
                 
-            <div style="display: flex; margin-bottom: 20px;">
-                <input type="text" name="bgg_search_term" placeholder="Search for games..." style="flex: 1; margin-right: 10px;" required value="<?php echo isset($_POST['bgg_search_term']) ? esc_attr($_POST['bgg_search_term']) : ''; ?>">
+            <div style="display: flex; margin-bottom: 20px; margin-top: 20px;">
+                <input type="text" name="bgg_search_term" placeholder="Search for games..." style="flex: 1; margin-right: 10px;" value="<?php echo isset($_POST['bgg_search_term']) ? esc_attr($_POST['bgg_search_term']) : ''; ?>">
                 <input type="submit" name="search_bgg" class="button button-primary" value="Search BGG">
+            </div>
+            
+            <div style="margin-bottom: 20px; margin-top: 20px; border-top: 1px solid #ddd; padding-top: 15px;">
+                <h4>Or Import Game by ID</h4>
+                <div style="display: flex;">
+                    <input type="number" name="bgg_id_input" id="bgg_id_input" placeholder="Enter BGG ID..." style="flex: 1; margin-right: 10px;" min="1">
+                    <button type="button" id="fetch_by_id_btn" class="button button-secondary">Fetch Game</button>
+                </div>
             </div>
             <div id="search-loading" class="bgm-loading-indicator" style="display: none;">
                 <span class="spinner is-active"></span>
@@ -145,6 +154,63 @@ function bgm_render_add_game_page($search_results = array(), $result = array()) 
         </div>
     </div>
     
+    <!-- Game Confirmation Modal -->
+    <div id="game-confirmation-modal" class="bgm-modal" style="display: none;">
+        <div class="bgm-modal-content" style="max-width: 600px;">
+            <span class="bgm-modal-close">&times;</span>
+            <h2>Confirm Game Import</h2>
+            <div id="game-confirm-content" class="bgm-confirm-content">
+                <div class="bgm-confirm-loading">
+                    <span class="spinner is-active"></span>
+                    <p>Fetching game data...</p>
+                </div>
+                <div class="bgm-confirm-details" style="display: none;">
+                    <div class="bgm-confirm-header">
+                        <img id="confirm-game-thumb" src="" alt="Game thumbnail">
+                        <div>
+                            <h3 id="confirm-game-name"></h3>
+                            <p id="confirm-game-year"></p>
+                        </div>
+                    </div>
+                    <table class="widefat" style="margin: 15px 0;">
+                        <tr>
+                            <th>BGG ID:</th>
+                            <td id="confirm-game-id"></td>
+                        </tr>
+                        <tr>
+                            <th>Players:</th>
+                            <td id="confirm-game-players"></td>
+                        </tr>
+                        <tr>
+                            <th>Playtime:</th>
+                            <td id="confirm-game-playtime"></td>
+                        </tr>
+                        <tr>
+                            <th>Complexity:</th>
+                            <td id="confirm-game-complexity"></td>
+                        </tr>
+                        <tr>
+                            <th>BGG Rank:</th>
+                            <td id="confirm-game-rank"></td>
+                        </tr>
+                    </table>
+                    
+                    <form method="post" action="" id="confirm-import-form">
+                        <input type="hidden" id="confirm-add-game-id" name="add_game_id" value="">
+                        <div class="bgm-confirm-actions">
+                            <button type="button" class="button bgm-cancel-import">Cancel</button>
+                            <button type="submit" class="button button-primary" id="confirm-import-btn">Add to Collection</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="bgm-confirm-error" style="display: none;">
+                    <p class="notice notice-error"></p>
+                    <button type="button" class="button bgm-cancel-import">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <style>
     /* Game cards styling */
     .bgm-search-results {
@@ -210,6 +276,76 @@ function bgm_render_add_game_page($search_results = array(), $result = array()) 
     .bgm-game-info form {
         margin-top: auto;
     }
+
+    /* Modal styles */
+    .bgm-modal {
+        display: none;
+        position: fixed;
+        z-index: 100000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0, 0, 0, 0.4);
+    }
+
+    .bgm-modal-content {
+        background-color: #fefefe;
+        margin: 5% auto;
+        padding: 20px;
+        border: 1px solid #ddd;
+        width: 80%;
+        max-width: 800px;
+        border-radius: 4px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .bgm-modal-close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .bgm-modal-close:hover,
+    .bgm-modal-close:focus {
+        color: black;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    /* Confirmation modal specific styles */
+    .bgm-confirm-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .bgm-confirm-header img {
+        width: 100px;
+        height: 100px;
+        object-fit: contain;
+        background: #f9f9f9;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-right: 15px;
+    }
+
+    .bgm-confirm-header h3 {
+        margin: 0 0 5px 0;
+    }
+
+    .bgm-confirm-actions {
+        margin-top: 20px;
+        text-align: right;
+    }
+
+    .bgm-confirm-actions button {
+        margin-left: 10px;
+    }
     </style>
 
     <script type="text/javascript">
@@ -224,10 +360,107 @@ function bgm_render_add_game_page($search_results = array(), $result = array()) 
             
             // Show loading indicator when form is submitted
             $('#bgg-search-form').on('submit', function() {
-                $('#search-button').prop('disabled', true).val('Searching...');
-                $('#search-loading').show();
+                // Only require the search term if the search button was clicked
+                if (document.activeElement.name === 'search_bgg') {
+                    if ($('input[name="bgg_search_term"]').val().trim() === '') {
+                        alert('Please enter a search term');
+                        return false;
+                    }
+                    $('#search-button').prop('disabled', true).val('Searching...');
+                    $('#search-loading').show();
+                }
                 return true; // Allow form submission to proceed
             });
+            
+            // Handle "Fetch Game by ID" button click
+            $('#fetch_by_id_btn').on('click', function() {
+                const bggId = $('#bgg_id_input').val().trim();
+                
+                if (bggId === '' || isNaN(bggId) || bggId <= 0) {
+                    alert('Please enter a valid BGG ID');
+                    return;
+                }
+                
+                // Show the confirmation modal
+                $('#game-confirmation-modal').css('display', 'block');
+                $('.bgm-confirm-details, .bgm-confirm-error').hide();
+                $('.bgm-confirm-loading').show();
+                
+                // Fetch game data from the BGG API directly
+                fetchGameDataFromBGG(bggId);
+            });
+            
+            // Close modal when clicking the close button
+            $('.bgm-modal-close, .bgm-cancel-import').on('click', function() {
+                $('#game-confirmation-modal').css('display', 'none');
+            });
+            
+            // Close modal when clicking outside of it
+            $(window).on('click', function(event) {
+                if ($(event.target).is('#game-confirmation-modal')) {
+                    $('#game-confirmation-modal').css('display', 'none');
+                }
+            });
+            
+            // Function to fetch game data from BGG
+            function fetchGameDataFromBGG(gameId) {
+                // Fetch the game data from the BGG API
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'bgm_fetch_game_by_id',
+                        game_id: gameId,
+                        security: $('#bgm_edit_game_nonce').val()
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            // Update the confirmation details
+                            populateConfirmationModal(response.data);
+                        } else {
+                            // Show error message
+                            $('.bgm-confirm-loading').hide();
+                            $('.bgm-confirm-error').show().find('p').text(response.message || 'Failed to fetch game data. Please try again.');
+                        }
+                    },
+                    error: function() {
+                        $('.bgm-confirm-loading').hide();
+                        $('.bgm-confirm-error').show().find('p').text('Error connecting to the server. Please try again.');
+                    }
+                });
+            }
+            
+            // Function to populate confirmation modal with game data
+            function populateConfirmationModal(game) {
+                // Update the game details in the modal
+                $('#confirm-game-name').text(game.name);
+                $('#confirm-game-year').text(game.year_published ? 'Published: ' + game.year_published : '');
+                $('#confirm-game-id').text(game.id);
+                $('#confirm-game-players').text(game.minplayers + ' - ' + game.maxplayers + ' players');
+                $('#confirm-game-playtime').text(game.minplaytime + ' - ' + game.maxplaytime + ' minutes');
+                $('#confirm-game-complexity').text(parseFloat(game.complexity).toFixed(2) + ' / 5.00');
+                
+                // Handle rank information
+                if (game.rank && game.rank < 999999) {
+                    $('#confirm-game-rank').text('#' + game.rank);
+                } else {
+                    $('#confirm-game-rank').text('Unranked');
+                }
+                
+                // Set the thumbnail if available
+                if (game.thumbnail) {
+                    $('#confirm-game-thumb').attr('src', game.thumbnail).show();
+                } else {
+                    $('#confirm-game-thumb').hide();
+                }
+                
+                // Set the hidden input for form submission
+                $('#confirm-add-game-id').val(game.id);
+                
+                // Hide loading and show details
+                $('.bgm-confirm-loading').hide();
+                $('.bgm-confirm-details').show();
+            }
         });
     </script>
     <?php

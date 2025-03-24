@@ -15,6 +15,7 @@ class BGM_Admin {
         add_action('wp_ajax_bgm_get_game_ajax', array($this, 'ajax_get_game'));
         add_action('wp_ajax_bgm_update_game_ajax', array($this, 'ajax_update_game'));
         add_action('wp_ajax_bgm_delete_game_ajax', array($this, 'ajax_delete_game'));
+        add_action('wp_ajax_bgm_fetch_game_by_id', array($this, 'ajax_fetch_game_by_id'));
     }
     
         /**
@@ -589,6 +590,86 @@ class BGM_Admin {
                 'success' => false,
                 'message' => 'Error deleting game: ' . $wpdb->last_error
             ));
+        }
+    }
+
+        /**
+     * AJAX handler for fetching game data by BGG ID
+     */
+    public function ajax_fetch_game_by_id() {
+        // Verify nonce
+        check_ajax_referer('bgm_edit_game_nonce', 'security');
+        
+        // Get game ID from request
+        $game_id = isset($_POST['game_id']) ? intval($_POST['game_id']) : 0;
+        
+        if ($game_id <= 0) {
+            wp_send_json_error('Invalid game ID provided.');
+            return;
+        }
+        
+        // Fetch game data from BGG API
+        $api_url = "https://boardgamegeek.com/xmlapi2/thing?id={$game_id}&stats=1";
+        
+        $response = wp_remote_get($api_url);
+        
+        if (is_wp_error($response)) {
+            wp_send_json_error('Failed to connect to BoardGameGeek API: ' . $response->get_error_message());
+            return;
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        
+        // Process XML
+        libxml_use_internal_errors(true);
+        $xml = simplexml_load_string($body);
+        
+        if ($xml === false) {
+            wp_send_json_error('Failed to parse BoardGameGeek API response.');
+            return;
+        }
+        
+        // Check if we got a valid game
+        if (!isset($xml->item) || count($xml->item) === 0) {
+            wp_send_json_error('Game not found with the provided ID.');
+            return;
+        }
+        
+        $item = $xml->item;
+        
+        // Extract game data
+        try {
+            $game_data = array(
+                'id' => (string)$item['id'],
+                'name' => (string)$item->name[0]['value'],
+                'thumbnail' => isset($item->thumbnail) ? (string)$item->thumbnail : '',
+                'minplayers' => (string)$item->minplayers['value'],
+                'maxplayers' => (string)$item->maxplayers['value'],
+                'minplaytime' => (string)$item->minplaytime['value'],
+                'maxplaytime' => (string)$item->maxplaytime['value'],
+                'year_published' => isset($item->yearpublished) ? (string)$item->yearpublished['value'] : '',
+                'complexity' => (string)$item->statistics->ratings->averageweight['value'],
+                'rating' => (string)$item->statistics->ratings->average['value']
+            );
+            
+            // Get BGG rank if available
+            $game_data['rank'] = 999999; // Default high rank for unranked games
+            if (isset($item->statistics->ratings->ranks->rank)) {
+                foreach ($item->statistics->ratings->ranks->rank as $rank_item) {
+                    if ((string)$rank_item['type'] === 'subtype' && (string)$rank_item['name'] === 'boardgame') {
+                        if ((string)$rank_item['value'] !== 'Not Ranked') {
+                            $game_data['rank'] = (int)$rank_item['value'];
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            // Success response
+            wp_send_json_success($game_data);
+            
+        } catch (Exception $e) {
+            wp_send_json_error('Error processing game data: ' . $e->getMessage());
         }
     }
 

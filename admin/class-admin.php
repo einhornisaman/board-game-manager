@@ -316,7 +316,7 @@ private function search_bgg_games($search_term) {
     );
 }
     
-    /**
+        /**
      * AJAX handler for real-time game search
      */
     public function ajax_search_games_ajax() {
@@ -325,25 +325,45 @@ private function search_bgg_games($search_term) {
         
         $search = isset($_GET['term']) ? sanitize_text_field($_GET['term']) : '';
         
-        if (empty($search)) {
-            wp_send_json(array(
-                'success' => false,
-                'message' => 'Search term is empty.'
-            ));
-            return;
+        // Get per_page setting from request, default to 20 if not provided
+        $per_page = isset($_GET['per_page']) ? intval($_GET['per_page']) : 20;
+        
+        // Sanitize per_page to only allow specific values
+        $allowed_per_page = array(10, 20, 50, 100);
+        if (!in_array($per_page, $allowed_per_page)) {
+            $per_page = 20; // Default if invalid
         }
+        
+        // Get current page, default to 1
+        $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
+        
+        // Calculate offset
+        $offset = ($current_page - 1) * $per_page;
         
         global $wpdb;
         $table_name = $wpdb->prefix . 'bgm_games';
         
-        // Get games matching the search term
-        $games = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, name, thumb, year_published, minplayers, maxplayers FROM $table_name 
-             WHERE name LIKE %s 
-             ORDER BY name 
-             LIMIT 12",
-            '%' . $wpdb->esc_like($search) . '%'
-        ));
+        // Get the total number of games in the database
+        $total_games = $wpdb->get_var("SELECT COUNT(*) FROM $table_name");
+        
+        // Set up the WHERE clause based on search term
+        $where_clause = empty($search) ? '' : $wpdb->prepare("WHERE name LIKE %s", '%' . $wpdb->esc_like($search) . '%');
+        
+        // Get total matching results count
+        $matching_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_name $where_clause");
+        
+        // Get paginated results
+        $games = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, name, thumb, bgglink, year_published, minplayers, maxplayers, 
+                        complexity, rating, bgg_id
+                FROM $table_name $where_clause
+                ORDER BY name 
+                LIMIT %d OFFSET %d",
+                $per_page,
+                $offset
+            )
+        );
         
         if ($wpdb->last_error) {
             wp_send_json(array(
@@ -359,14 +379,27 @@ private function search_bgg_games($search_term) {
                 'id' => $game->id,
                 'name' => $game->name,
                 'thumb' => $game->thumb,
+                'bgglink' => $game->bgglink,
                 'year' => $game->year_published,
-                'players' => $game->minplayers . '-' . $game->maxplayers
+                'minplayers' => $game->minplayers,
+                'maxplayers' => $game->maxplayers,
+                'complexity' => $game->complexity,
+                'rating' => $game->rating,
+                'bgg_id' => $game->bgg_id
             );
         }
+        
+        // Calculate total pages
+        $total_pages = ceil($matching_count / $per_page);
         
         wp_send_json(array(
             'success' => true,
             'count' => count($results),
+            'matching_count' => $matching_count,
+            'total_games' => $total_games,
+            'current_page' => $current_page,
+            'total_pages' => $total_pages,
+            'per_page' => $per_page,
             'data' => $results
         ));
     }

@@ -83,16 +83,14 @@ function bgm_render_admin_page() {
     </div>
     
     <div class="aligncenter" style="float: left; margin-left: 20px;">
-        <form method="get" style="display: flex; align-items: center;">
+        <form method="get" id="game-search-form" style="display: flex; align-items: center;">
             <input type="hidden" name="page" value="board-game-manager">
             <input type="hidden" name="per_page" value="<?php echo esc_attr($per_page); ?>">
             <input type="search" id="game-search" name="game_search" 
                 value="<?php echo esc_attr($search_term); ?>" 
                 placeholder="Search by name..." style="margin-right: 5px;">
-            <input type="submit" class="button" value="Search">
-            <?php if (!empty($search_term)) : ?>
-                <a href="<?php echo esc_url(add_query_arg('per_page', $per_page, admin_url('admin.php?page=board-game-manager'))); ?>" class="button" style="margin-left: 5px;">Clear</a>
-            <?php endif; ?>
+            <button type="submit" class="button">Search</button>
+            <!-- Remove the PHP-generated clear button -->
         </form>
     </div>
     

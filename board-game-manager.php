@@ -16,13 +16,21 @@ if (!defined('WPINC')) {
 define('BGM_VERSION', '1.1.0');
 define('BGM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('BGM_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('BGM_PLUGIN_FILE', __FILE__);
 
 // Load required files
 require_once BGM_PLUGIN_DIR . 'includes/class-database.php';
 require_once BGM_PLUGIN_DIR . 'includes/class-bgg-api.php';
+require_once BGM_PLUGIN_DIR . 'includes/class-update-manager.php';
 require_once BGM_PLUGIN_DIR . 'admin/class-admin.php';
 require_once BGM_PLUGIN_DIR . 'public/class-public.php';
 
 // Register activation/deactivation hooks
 register_activation_hook(__FILE__, array('BGM_Database', 'activate'));
 register_deactivation_hook(__FILE__, array('BGM_Database', 'deactivate'));
+
+// Initialize the update manager
+$bgm_update_manager = new BGM_Update_Manager();
+
+// Register actions for processing update batches
+add_action('bgm_process_update_batch', array($bgm_update_manager, 'process_update_batch'));

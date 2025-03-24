@@ -16,6 +16,11 @@ class BGM_Admin {
         add_action('wp_ajax_bgm_update_game_ajax', array($this, 'ajax_update_game'));
         add_action('wp_ajax_bgm_delete_game_ajax', array($this, 'ajax_delete_game'));
         add_action('wp_ajax_bgm_fetch_game_by_id', array($this, 'ajax_fetch_game_by_id'));
+        add_action('wp_ajax_bgm_start_games_update', array($this, 'ajax_start_games_update'));
+        add_action('wp_ajax_bgm_pause_games_update', array($this, 'ajax_pause_games_update'));
+        add_action('wp_ajax_bgm_resume_games_update', array($this, 'ajax_resume_games_update'));
+        add_action('wp_ajax_bgm_stop_games_update', array($this, 'ajax_stop_games_update'));
+        add_action('wp_ajax_bgm_get_update_progress', array($this, 'ajax_get_update_progress'));
     }
     
         /**
@@ -50,6 +55,16 @@ class BGM_Admin {
             'manage_options',
             'bgm-add-games',          // If you've changed this from bgm-add-remove
             array($this, 'add_game_page')  // If you've changed this from add_remove_page
+        );
+
+        // Add new Update Games submenu
+        add_submenu_page(
+            'board-game-manager',
+            'Update Games',
+            'Update Games',
+            'manage_options',
+            'bgm-update-games',
+            array($this, 'update_games_page')
         );
     }
     
@@ -115,6 +130,17 @@ class BGM_Admin {
         
         // Call the render function
         bgm_render_add_game_page($search_results, $result);
+    }
+
+    /**
+     * Display the update games page
+     */
+    public function update_games_page() {
+        // Include the view file
+        require_once BGM_PLUGIN_DIR . 'admin/views/update-games-page.php';
+        
+        // Call the render function
+        bgm_render_update_games_page();
     }
     
     /**
@@ -671,6 +697,76 @@ class BGM_Admin {
         } catch (Exception $e) {
             wp_send_json_error('Error processing game data: ' . $e->getMessage());
         }
+    }
+
+        /**
+     * AJAX handler for starting a game update
+     */
+    public function ajax_start_games_update() {
+        if (!class_exists('BGM_Update_Manager')) {
+            wp_send_json_error('Update manager not available.');
+            return;
+        }
+        
+        // Call the update manager's method
+        $update_manager = new BGM_Update_Manager();
+        $update_manager->ajax_start_games_update();
+    }
+
+    /**
+     * AJAX handler for pausing a game update
+     */
+    public function ajax_pause_games_update() {
+        if (!class_exists('BGM_Update_Manager')) {
+            wp_send_json_error('Update manager not available.');
+            return;
+        }
+        
+        // Call the update manager's method
+        $update_manager = new BGM_Update_Manager();
+        $update_manager->ajax_pause_games_update();
+    }
+
+    /**
+     * AJAX handler for resuming a game update
+     */
+    public function ajax_resume_games_update() {
+        if (!class_exists('BGM_Update_Manager')) {
+            wp_send_json_error('Update manager not available.');
+            return;
+        }
+        
+        // Call the update manager's method
+        $update_manager = new BGM_Update_Manager();
+        $update_manager->ajax_resume_games_update();
+    }
+
+    /**
+     * AJAX handler for stopping a game update
+     */
+    public function ajax_stop_games_update() {
+        if (!class_exists('BGM_Update_Manager')) {
+            wp_send_json_error('Update manager not available.');
+            return;
+        }
+        
+        // Call the update manager's method
+        $update_manager = new BGM_Update_Manager();
+        $update_manager->ajax_stop_games_update();
+    }
+
+    /**
+     * AJAX handler for getting update progress
+     */
+    public function ajax_get_update_progress() {
+        if (!class_exists('BGM_Update_Manager')) {
+            wp_send_json_error('Update manager not available.');
+            return;
+        }
+        
+        // Call the update manager's method
+        $update_manager = new BGM_Update_Manager();
+        $update_manager->ajax_get_update_progress();
     }
 
 }

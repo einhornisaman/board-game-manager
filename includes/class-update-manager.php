@@ -98,8 +98,8 @@ class BGM_Update_Manager {
             // Update the last auto-update timestamp
             update_option('bgm_last_auto_update', current_time('mysql'));
             
-            // Start the update process
-            $this->start_update(true, true, '1month');
+            // Start the update process - only update games older than 1 month
+            $this->start_update(false, true, '1month');
             
             // The update will run in the background via the WP-Cron
         }
@@ -118,12 +118,11 @@ class BGM_Update_Manager {
         }
         
         // Get parameters
-        $update_missing = isset($_POST['update_missing']) ? filter_var($_POST['update_missing'], FILTER_VALIDATE_BOOLEAN) : true;
-        $update_old = isset($_POST['update_old']) ? filter_var($_POST['update_old'], FILTER_VALIDATE_BOOLEAN) : true;
+        $update_old = isset($_POST['update_old']) ? filter_var($_POST['update_old'], FILTER_VALIDATE_BOOLEAN) : false;
         $timeframe = isset($_POST['timeframe']) ? sanitize_text_field($_POST['timeframe']) : '1week';
         
         // Start the update
-        $result = $this->start_update($update_missing, $update_old, $timeframe);
+        $result = $this->start_update(false, $update_old, $timeframe);
         
         if ($result) {
             wp_send_json_success('Update started');
@@ -225,14 +224,25 @@ class BGM_Update_Manager {
         // Get the current progress
         $progress = get_option('bgm_update_progress', []);
         
-        // Get and clear log messages
+        // Get log messages since last check
         $log_messages = get_option('bgm_update_log', []);
         
-        // Add log messages to the response
-        $progress['log'] = $log_messages;
+        // Find the last log message ID that was sent to the client
+        $last_sent_log_id = isset($_GET['last_log_id']) ? intval($_GET['last_log_id']) : -1;
         
-        // Clear the log after reading
-        update_option('bgm_update_log', []);
+        // Only send new log messages
+        $new_logs = [];
+        foreach ($log_messages as $index => $log) {
+            if ($index > $last_sent_log_id) {
+                $new_logs[] = $log;
+            }
+        }
+        
+        // Add log messages to the response
+        $progress['log'] = $new_logs;
+        $progress['last_log_id'] = count($log_messages) - 1;
+        
+        // Don't clear the log
         
         wp_send_json_success($progress);
     }
@@ -275,7 +285,7 @@ class BGM_Update_Manager {
             $where_clauses[] = "(last_updated < DATE_SUB(NOW(), INTERVAL $interval))";
         }
         
-        // If no criteria were selected, update all games - but this should not normally happen
+        // If no criteria were selected, update all games
         $where = !empty($where_clauses) ? "WHERE " . implode(' OR ', $where_clauses) : "";
         
         // Count total games to update
@@ -305,10 +315,14 @@ class BGM_Update_Manager {
             'last_updated_game' => '',
             'start_time' => current_time('mysql'),
             'end_time' => '',
-            'query_criteria' => $query_criteria // Store query criteria
+            'query_criteria' => $query_criteria, // Store query criteria
+            'processed_ids' => [] // Initialize empty array to track processed games
         ];
         
         update_option('bgm_update_progress', $progress);
+        
+        // Clear any existing log
+        update_option('bgm_update_log', []);
         
         // Log the start
         $this->log_update("Starting update for $total_games games");
@@ -359,11 +373,22 @@ class BGM_Update_Manager {
             $where = $progress['query_criteria']['where'];
         }
         
-        $query = $wpdb->prepare(
-            "SELECT id, bgg_id, name FROM $table_name $where ORDER BY last_updated ASC LIMIT %d OFFSET %d",
-            $batch_size,
-            $offset
-        );
+        // Add a check to exclude already processed games
+        $processed_ids = isset($progress['processed_ids']) ? $progress['processed_ids'] : [];
+        $exclude_clause = '';
+        
+        if (!empty($processed_ids)) {
+            // Prepare the IDs properly for the query
+            $exclude_ids = implode(',', array_map('intval', $processed_ids));
+            // Add the NOT IN clause to the WHERE clause correctly
+            if (!empty($where)) {
+                $where .= " AND bgg_id NOT IN ($exclude_ids)";
+            } else {
+                $where = "WHERE bgg_id NOT IN ($exclude_ids)";
+            }
+        }
+        
+        $query = "SELECT id, bgg_id, name FROM $table_name $where ORDER BY last_updated ASC LIMIT $batch_size";
         
         $games = $wpdb->get_results($query);
         
@@ -386,6 +411,11 @@ class BGM_Update_Manager {
         
         // Process each game in the batch
         foreach ($games as $game) {
+            // Skip if game doesn't have a bgg_id (shouldn't happen, but just in case)
+            if (empty($game->bgg_id)) {
+                continue;
+            }
+            
             // Check again if the update has been paused or stopped
             $current_progress = get_option('bgm_update_progress', []);
             if ($current_progress['status'] === 'paused' || $current_progress['status'] === 'stopped') {
@@ -396,6 +426,12 @@ class BGM_Update_Manager {
             $result = $this->update_single_game($game->bgg_id);
             
             if ($result['success']) {
+                // Add this game to processed list
+                if (!isset($progress['processed_ids'])) {
+                    $progress['processed_ids'] = [];
+                }
+                $progress['processed_ids'][] = $game->bgg_id;
+                
                 // Increment completed count but don't exceed total
                 $progress['completed'] = min($progress['completed'] + 1, $progress['total']);
                 $progress['last_updated_game'] = $game->name;
@@ -405,19 +441,23 @@ class BGM_Update_Manager {
             } else {
                 // Log error
                 $this->log_update("Error updating {$game->name}: {$result['message']}", 'error');
+                
+                // Still add to processed list to avoid retrying failed items
+                if (!isset($progress['processed_ids'])) {
+                    $progress['processed_ids'] = [];
+                }
+                $progress['processed_ids'][] = $game->bgg_id;
             }
             
-            // Update progress
-            $progress['current_offset'] = $offset + 1;
+            // Update progress after each game
             update_option('bgm_update_progress', $progress);
             
             // Small delay to avoid overwhelming the BGG API
             sleep(2);
         }
         
-        // Schedule the next batch
-        $next_offset = $offset + count($games);
-        $this->schedule_next_batch($next_offset);
+        // Schedule the next batch - don't use offsets anymore, we're using the processed_ids list instead
+        $this->schedule_next_batch(0);
     }
     
     /**
@@ -520,31 +560,10 @@ class BGM_Update_Manager {
                 $designer .= " (and more)";
             }
             
-            // Escape all values to prevent SQL syntax errors
-            $name = $wpdb->_real_escape($name);
-            $thumbnail = $wpdb->_real_escape($thumbnail);
-            $minplayers = $wpdb->_real_escape($minplayers);
-            $maxplayers = $wpdb->_real_escape($maxplayers);
-            $minplaytime = $wpdb->_real_escape($minplaytime);
-            $maxplaytime = $wpdb->_real_escape($maxplaytime);
-            $complexity = $wpdb->_real_escape($complexity);
-            $rating = $wpdb->_real_escape($rating);
-            $bgglink = $wpdb->_real_escape($bgglink);
-            $catNames = $wpdb->_real_escape($catNames);
-            $mechNames = $wpdb->_real_escape($mechNames);
-            $description = $wpdb->_real_escape($description);
-            $year_published = $wpdb->_real_escape($year_published);
-            $publisher = $wpdb->_real_escape($publisher);
-            $designer = $wpdb->_real_escape($designer);
+            // Get current timestamp in the WordPress format
+            $timestamp = current_time('mysql');
             
-            // Set current timestamp
-            // Set timestamp using Eastern Time
-            $old_timezone = date_default_timezone_get();
-            date_default_timezone_set('America/New_York');
-            $timestamp = date('Y-m-d H:i:s');
-            date_default_timezone_set($old_timezone); // Restore the original timezone
-            
-            // Update the database
+            // Update the database with prepared statement to prevent SQL injection
             $result = $wpdb->update(
                 $table_name,
                 [
@@ -565,13 +584,19 @@ class BGM_Update_Manager {
                     'designer' => $designer,
                     'last_updated' => $timestamp
                 ],
-                ['bgg_id' => $bgg_id]
+                ['bgg_id' => $bgg_id],
+                [
+                    '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
+                    '%s', '%s', '%s', '%s', '%s', '%s'
+                ],
+                ['%s']
             );
             
             if ($result !== false) {
                 return [
                     'success' => true,
-                    'message' => 'Game updated successfully'
+                    'message' => 'Game updated successfully',
+                    'name' => $name
                 ];
             } else {
                 return [
@@ -589,10 +614,25 @@ class BGM_Update_Manager {
     }
     
     /**
-     * Log update progress message
+     * Log update progress message with duplicate detection
      */
     private function log_update($message, $type = '') {
+        // Get current log
         $log = get_option('bgm_update_log', []);
+        
+        // If this is a game update message, handle it specially
+        if (strpos($message, 'Updated: ') === 0) {
+            // Extract the game name from the message
+            $game_name = substr($message, 9); // Everything after "Updated: "
+            
+            // Check if we already logged this game name
+            foreach ($log as $entry) {
+                if (isset($entry['message']) && strpos($entry['message'], 'Updated: ' . $game_name) === 0) {
+                    // Skip adding this duplicate log entry
+                    return;
+                }
+            }
+        }
         
         // Add the new message to the log
         $log[] = [

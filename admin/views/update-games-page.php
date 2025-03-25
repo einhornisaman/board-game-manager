@@ -72,11 +72,7 @@ function bgm_render_update_games_page() {
                     
                     <div class="update-options" style="margin-top: 15px;">
                         <label>
-                            <input type="checkbox" id="update-option-missing" checked>
-                            Update games with missing data
-                        </label>
-                        <label>
-                            <input type="checkbox" id="update-option-old" checked>
+                            <input type="checkbox" id="update-option-old">
                             Update games older than:
                             <select id="update-option-timeframe">
                                 <option value="1day">1 day</option>
@@ -192,13 +188,18 @@ function bgm_render_update_games_page() {
         }
         
         // Function to update the progress display
+        
         function updateProgressDisplay() {
+            // Track last log ID we've received
+            var lastLogId = -1;
+            
             $.ajax({
                 url: ajaxurl,
                 type: 'GET',
                 data: {
                     action: 'bgm_get_update_progress',
-                    security: '<?php echo $nonce; ?>'
+                    security: '<?php echo $nonce; ?>',
+                    last_log_id: lastLogId
                 },
                 success: function(response) {
                     if (response.success) {
@@ -221,6 +222,11 @@ function bgm_render_update_games_page() {
                             progress.log.forEach(logEntry => {
                                 logMessage(logEntry.message, logEntry.type);
                             });
+                        }
+                        
+                        // Update the last log ID we've received
+                        if (progress.last_log_id !== undefined) {
+                            lastLogId = progress.last_log_id;
                         }
                         
                         // Enable/disable pause and resume buttons based on status
@@ -246,7 +252,6 @@ function bgm_render_update_games_page() {
         
         // Start update button click handler
         $('#start-update').on('click', function() {
-            const updateMissing = $('#update-option-missing').is(':checked');
             const updateOld = $('#update-option-old').is(':checked');
             const timeframe = $('#update-option-timeframe').val();
             
@@ -267,7 +272,6 @@ function bgm_render_update_games_page() {
                 type: 'POST',
                 data: {
                     action: 'bgm_start_games_update',
-                    update_missing: updateMissing,
                     update_old: updateOld,
                     timeframe: timeframe,
                     security: '<?php echo $nonce; ?>'

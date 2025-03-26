@@ -93,13 +93,15 @@ class BGM_Update_Manager {
         // Only proceed if no update is already in progress
         if (!get_transient('bgm_update_in_progress')) {
             // Log the start of auto-update
-            $this->log_update('Starting automatic update process');
+            $this->log_update('Starting automatic update process for ALL games');
             
             // Update the last auto-update timestamp
             update_option('bgm_last_auto_update', current_time('mysql'));
             
-            // Start the update process - only update games older than 1 month
-            $this->start_update(false, true, '1month');
+            // Start the update process for ALL games (not just ones older than a month)
+            // false, false = don't filter by missing or old games
+            // null = no time filter
+            $this->start_update(false, false, null);
             
             // The update will run in the background via the WP-Cron
         }
@@ -264,7 +266,7 @@ class BGM_Update_Manager {
             $where_clauses[] = "(last_updated IS NULL)";
         }
         
-        if ($update_old) {
+        if ($update_old && $timeframe !== null) {
             $interval = '7 DAY'; // Default to 1 week
             
             switch ($timeframe) {
@@ -325,7 +327,7 @@ class BGM_Update_Manager {
         update_option('bgm_update_log', []);
         
         // Log the start
-        $this->log_update("Starting update for $total_games games");
+        $this->log_update("Starting automatic update for $total_games games");
         
         // Schedule the first batch
         $this->schedule_next_batch(0);

@@ -68,7 +68,7 @@ function bgm_render_update_games_page() {
                 </div>
             <?php else: ?>
                 <div class="update-controls">
-                    <button id="start-update" class="button button-primary">Start Full Update</button>
+                    <button id="start-update" class="button button-primary">Start Update</button>
                     
                     <div class="update-options" style="margin-top: 15px;">
                         <label>

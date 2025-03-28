@@ -1,0 +1,14 @@
+[Unit]
+Description=WordPress Rapid Cron for BGM Updates
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/html/wordpress
+ExecStart=/bin/bash -c 'while true; do if [ -f "/tmp/bgm_rapid_mode" ]; then wget -q -O /dev/null "http://localhost/wordpress/wp-cron.php?doing_wp_cron=$(date +%s%N)" || true; sleep 0.2; else sleep 5; fi; done'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

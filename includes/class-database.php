@@ -37,6 +37,8 @@ class BGM_Database {
             `year_published` int(11) DEFAULT NULL,
             `publisher` text DEFAULT NULL,
             `designer` text DEFAULT NULL,
+            `primary_type` varchar(50) DEFAULT 'boardgame',
+            `subtypes` text DEFAULT NULL,
             `date_added` datetime DEFAULT CURRENT_TIMESTAMP,
             `last_updated` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             `added_by` bigint(20) UNSIGNED DEFAULT NULL,
@@ -46,8 +48,60 @@ class BGM_Database {
         
         dbDelta($sql);
         
+        // Create user game lists table
+        $user_lists_table = $wpdb->prefix . 'bgm_user_lists';
+        $sql = "CREATE TABLE $user_lists_table (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id` bigint(20) UNSIGNED NOT NULL,
+            `name` varchar(255) NOT NULL,
+            `description` text DEFAULT NULL,
+            `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `user_id` (`user_id`)
+        ) $charset_collate;";
+        
+        dbDelta($sql);
+        
+        // Create user list items table
+        $user_list_items_table = $wpdb->prefix . 'bgm_user_list_items';
+        $sql = "CREATE TABLE $user_list_items_table (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            `list_id` bigint(20) UNSIGNED NOT NULL,
+            `game_id` bigint(20) UNSIGNED NOT NULL,
+            `custom_data` text DEFAULT NULL,
+            `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `list_id` (`list_id`),
+            KEY `game_id` (`game_id`)
+        ) $charset_collate;";
+        
+        dbDelta($sql);
+        
+        // Create custom game data table
+        $custom_game_data_table = $wpdb->prefix . 'bgm_custom_game_data';
+        $sql = "CREATE TABLE $custom_game_data_table (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id` bigint(20) UNSIGNED NOT NULL,
+            `game_id` bigint(20) UNSIGNED NOT NULL,
+            `field_name` varchar(255) NOT NULL,
+            `field_value` text DEFAULT NULL,
+            `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `user_game_field` (`user_id`, `game_id`, `field_name`),
+            KEY `user_id` (`user_id`),
+            KEY `game_id` (`game_id`)
+        ) $charset_collate;";
+        
+        dbDelta($sql);
+        
         // Create JS folder and files
         self::create_js_files();
+        
+        // Create necessary pages if they don't exist
+        self::create_plugin_pages();
     }
     
     /**
@@ -264,6 +318,26 @@ jQuery(document).ready(function($) {
 EOT;
             
             file_put_contents($filters_js_path, $filters_js_content);
+        }
+    }
+    
+    /**
+     * Create necessary pages for the plugin
+     */
+    private static function create_plugin_pages() {
+        // Create list-games page if it doesn't exist
+        $list_games_page = get_page_by_path('manage-game-list');
+        if (!$list_games_page) {
+            $page_id = wp_insert_post(array(
+                'post_title'    => 'Manage Game List',
+                'post_content'  => '[bgm_manage_game_list]',
+                'post_status'   => 'publish',
+                'post_type'     => 'page',
+                'post_name'     => 'manage-game-list'
+            ));
+            update_option('bgm_list_games_page', $page_id);
+        } else {
+            update_option('bgm_list_games_page', $list_games_page->ID);
         }
     }
 }

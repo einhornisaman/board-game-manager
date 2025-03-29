@@ -17,7 +17,7 @@ class BGM_User_Manager {
         $table = $this->wpdb->prefix . 'bgm_user_lists';
         return $this->wpdb->get_results(
             $this->wpdb->prepare(
-                "SELECT * FROM $table WHERE user_id = %d ORDER BY created_at DESC",
+                "SELECT * FROM $table WHERE user_id = %d ORDER BY sort_order ASC, created_at DESC",
                 $user_id
             )
         );
@@ -28,14 +28,24 @@ class BGM_User_Manager {
      */
     public function create_list($user_id, $name, $description = '') {
         $table = $this->wpdb->prefix . 'bgm_user_lists';
+        
+        // Get the minimum sort_order (to place new list at top)
+        $min_order = $this->wpdb->get_var($this->wpdb->prepare(
+            "SELECT MIN(sort_order) FROM $table WHERE user_id = %d",
+            $user_id
+        ));
+        
+        $new_order = is_null($min_order) ? 0 : $min_order - 1;
+        
         return $this->wpdb->insert(
             $table,
             array(
                 'user_id' => $user_id,
                 'name' => $name,
-                'description' => $description
+                'description' => $description,
+                'sort_order' => $new_order
             ),
-            array('%d', '%s', '%s')
+            array('%d', '%s', '%s', '%d')
         );
     }
     
@@ -275,6 +285,32 @@ class BGM_User_Manager {
             ),
             array('id' => $list_id),
             array('%s', '%s', '%s'),
+            array('%d')
+        );
+    }
+
+    /**
+     * Update list sort order
+     */
+    public function update_list_order($list_id, $user_id, $new_order) {
+        $table = $this->wpdb->prefix . 'bgm_user_lists';
+        
+        // Verify ownership
+        $list = $this->wpdb->get_row($this->wpdb->prepare(
+            "SELECT * FROM $table WHERE id = %d AND user_id = %d",
+            $list_id,
+            $user_id
+        ));
+        
+        if (!$list) {
+            return false;
+        }
+        
+        return $this->wpdb->update(
+            $table,
+            array('sort_order' => $new_order),
+            array('id' => $list_id),
+            array('%d'),
             array('%d')
         );
     }

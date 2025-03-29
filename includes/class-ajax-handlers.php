@@ -21,6 +21,7 @@ class BGM_Ajax_Handlers {
         add_action('wp_ajax_bgm_get_game_details', array($this, 'handle_get_game_details'));
         add_action('wp_ajax_bgm_edit_list', array($this, 'handle_edit_list'));
         add_action('wp_ajax_bgm_add_game_to_list', array($this, 'handle_add_game_to_list'));
+        add_action('wp_ajax_bgm_update_list_order', array($this, 'handle_update_list_order'));
     }
     
     /**
@@ -536,5 +537,77 @@ class BGM_Ajax_Handlers {
         }
         
         wp_send_json_success($formatted_results);
+    }
+
+    /**
+     * Handle updating list order
+     */
+    public function handle_update_list_order() {
+        // Verify nonce
+        check_ajax_referer('bgm_ajax_nonce', 'security');
+        
+        if (!is_user_logged_in()) {
+            wp_send_json_error('User not logged in');
+            return;
+        }
+        
+        $user_id = get_current_user_id();
+        $orders = isset($_POST['orders']) ? $_POST['orders'] : array();
+        
+        if (empty($orders) || !is_array($orders)) {
+            wp_send_json_error('Invalid order data');
+            return;
+        }
+        
+        global $wpdb;
+        $table = $wpdb->prefix . 'bgm_user_lists';
+        $success = true;
+        
+        // Start transaction
+        $wpdb->query('START TRANSACTION');
+        
+        try {
+            foreach ($orders as $order) {
+                $list_id = isset($order['id']) ? intval($order['id']) : 0;
+                $new_order = isset($order['order']) ? intval($order['order']) : 0;
+                
+                if (!$list_id) {
+                    throw new Exception('Invalid list ID');
+                }
+                
+                // Verify ownership
+                $list = $wpdb->get_row($wpdb->prepare(
+                    "SELECT * FROM $table WHERE id = %d AND user_id = %d",
+                    $list_id,
+                    $user_id
+                ));
+                
+                if (!$list) {
+                    throw new Exception('List not found or access denied');
+                }
+                
+                // Update the order
+                $result = $wpdb->update(
+                    $table,
+                    array('sort_order' => $new_order),
+                    array('id' => $list_id),
+                    array('%d'),
+                    array('%d')
+                );
+                
+                if ($result === false) {
+                    throw new Exception('Error updating list order');
+                }
+            }
+            
+            // If we got here, commit the transaction
+            $wpdb->query('COMMIT');
+            wp_send_json_success('List orders updated successfully');
+            
+        } catch (Exception $e) {
+            // If anything went wrong, rollback
+            $wpdb->query('ROLLBACK');
+            wp_send_json_error($e->getMessage());
+        }
     }
 } 

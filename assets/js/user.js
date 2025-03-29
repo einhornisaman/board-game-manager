@@ -1,4 +1,154 @@
 jQuery(document).ready(function($) {
+    // Function to update arrow visibility
+    function updateArrowVisibility() {
+        const $items = $('.bgm-list-item');
+        const totalItems = $items.length;
+        
+        $items.each(function(index) {
+            const $item = $(this);
+            const isFirst = index === 0;
+            const isLast = index === (totalItems - 1);
+            
+            // Remove any existing move arrows
+            $item.find('.move-up, .move-down').remove();
+            
+            // Add arrows based on position
+            const $controls = $item.find('.list-controls');
+            if (!isFirst) {
+                $controls.prepend('<button type="button" class="move-arrow move-up" title="Move list up"></button>');
+            }
+            if (!isLast) {
+                $controls.append('<button type="button" class="move-arrow move-down" title="Move list down"></button>');
+            }
+        });
+    }
+
+    // Initialize arrow visibility on page load
+    updateArrowVisibility();
+
+    // Handle arrow clicks for list reordering
+    $(document).on('click', '.move-arrow', function(e) {
+        e.stopPropagation();
+        const $button = $(this);
+        const $listItem = $button.closest('.bgm-list-item');
+        const moveUp = $button.hasClass('move-up');
+        
+        if (moveUp) {
+            const $prevItem = $listItem.prev('.bgm-list-item');
+            if ($prevItem.length) {
+                $listItem.insertBefore($prevItem);
+                updateArrowVisibility();
+            }
+        } else {
+            const $nextItem = $listItem.next('.bgm-list-item');
+            if ($nextItem.length) {
+                $listItem.insertAfter($nextItem);
+                updateArrowVisibility();
+            }
+        }
+        
+        // Update all list orders
+        let newOrders = [];
+        $('.bgm-list-item').each(function(index) {
+            newOrders.push({
+                id: $(this).data('id'),
+                order: index
+            });
+        });
+        
+        // Send the update to the server
+        $.ajax({
+            url: bgm_ajax.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'bgm_update_list_order',
+                orders: newOrders,
+                security: bgm_ajax.nonce
+            },
+            error: function() {
+                alert('Error updating list order. Please try again.');
+            }
+        });
+    });
+    
+    // Initialize drag and drop for list reordering
+    let draggedItem = null;
+    let lists = $('.bgm-list-item');
+    
+    lists.each(function() {
+        $(this).on('dragstart', function(e) {
+            draggedItem = this;
+            $(this).addClass('dragging');
+            e.originalEvent.dataTransfer.effectAllowed = 'move';
+        });
+        
+        $(this).on('dragend', function() {
+            draggedItem = null;
+            $(this).removeClass('dragging');
+            $('.bgm-list-item').removeClass('drag-over');
+            updateArrowVisibility();
+            
+            // Update all list orders
+            let newOrders = [];
+            $('.bgm-list-item').each(function(index) {
+                newOrders.push({
+                    id: $(this).data('id'),
+                    order: index
+                });
+            });
+            
+            // Send the update to the server
+            $.ajax({
+                url: bgm_ajax.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'bgm_update_list_order',
+                    orders: newOrders,
+                    security: bgm_ajax.nonce
+                },
+                error: function() {
+                    alert('Error updating list order. Please try again.');
+                }
+            });
+        });
+        
+        $(this).on('dragover', function(e) {
+            e.preventDefault();
+            e.originalEvent.dataTransfer.dropEffect = 'move';
+            
+            if (draggedItem !== this) {
+                let rect = this.getBoundingClientRect();
+                let midY = rect.top + rect.height / 2;
+                
+                if (e.originalEvent.clientY < midY) {
+                    $(this).before(draggedItem);
+                } else {
+                    $(this).after(draggedItem);
+                }
+                updateArrowVisibility();
+            }
+        });
+        
+        $(this).on('dragenter', function(e) {
+            e.preventDefault();
+            if (draggedItem !== this) {
+                $(this).addClass('drag-over');
+            }
+        });
+        
+        $(this).on('dragleave', function() {
+            $(this).removeClass('drag-over');
+        });
+        
+        $(this).on('drop', function(e) {
+            e.preventDefault();
+            $(this).removeClass('drag-over');
+        });
+        
+        // Make the list items draggable
+        $(this).attr('draggable', true);
+    });
+
     // Create list form toggle
     $('#bgm-create-list-btn').on('click', function() {
         $('#bgm-create-list-form').slideDown();
@@ -97,6 +247,27 @@ jQuery(document).ready(function($) {
         var itemsPerPage = 20;
         var allRows = [];
         var filteredRows = [];
+
+        // Add game form toggle
+        $('[data-action="add-game"]').on('click', function() {
+            $('#bgm-add-game-form-container').slideDown();
+            // Ensure the search results are hidden initially
+            $('#search-results').hide();
+            $('.search-results-grid').empty();
+            $('.no-local-results').hide();
+            $('.search-results-bgg').hide();
+        });
+        
+        // Cancel add game
+        $('[data-action="cancel-add-game"]').on('click', function() {
+            $('#bgm-add-game-form-container').slideUp();
+            // Clear any search results and input
+            $('#search-results').hide();
+            $('#bgm-add-game-form input[name="search"]').val('');
+            $('.search-results-grid').empty();
+            $('.no-local-results').hide();
+            $('.search-results-bgg').hide();
+        });
 
         // Store all table rows
         allRows = $('.bgm-manage-game-list .wp-list-table tbody tr').toArray();
@@ -222,132 +393,83 @@ jQuery(document).ready(function($) {
         $('#filterPlayerCount, #filterComplexity, #filterGameTime, #filterCategory, #filterMechanic').on('change', filterGames);
 
         function filterGames() {
+            // Reset filtered rows to all rows
+            filteredRows = allRows.slice();
+            
+            // Get filter values
             var searchTerm = $('input[data-filter="search"]').val().toLowerCase();
-            var playerFilter = $('#filterPlayerCount').val();
-            var complexityFilter = $('#filterComplexity').val();
-            var gameTimeFilter = $('#filterGameTime').val();
-            var categoryFilter = $('#filterCategory').val();
-            var mechanicFilter = $('#filterMechanic').val();
-
-            // Update hidden inputs for complexity based on selection
-            if (complexityFilter) {
-                switch(complexityFilter) {
-                    case '1': // Easy
-                        $('#complexityMin').val('0');
-                        $('#complexityMax').val('1.49');
-                        break;
-                    case '2': // Light
-                        $('#complexityMin').val('1.5');
-                        $('#complexityMax').val('1.99');
-                        break;
-                    case '3': // Medium Light
-                        $('#complexityMin').val('2');
-                        $('#complexityMax').val('2.49');
-                        break;
-                    case '4': // Medium
-                        $('#complexityMin').val('2.5');
-                        $('#complexityMax').val('2.99');
-                        break;
-                    case '5': // Medium Heavy
-                        $('#complexityMin').val('3');
-                        $('#complexityMax').val('3.49');
-                        break;
-                    case '6': // Heavy
-                        $('#complexityMin').val('3.5');
-                        $('#complexityMax').val('5');
-                        break;
-                    default:
-                        $('#complexityMin').val('0');
-                        $('#complexityMax').val('9999');
-                }
-            }
-
-            // Update hidden inputs for game time based on selection
-            if (gameTimeFilter) {
-                switch(gameTimeFilter) {
-                    case '1': // 1-15 minutes
-                        $('#min').val('0');
-                        $('#max').val('15');
-                        break;
-                    case '2': // 15-30 minutes
-                        $('#min').val('15');
-                        $('#max').val('30');
-                        break;
-                    case '3': // 30-60 minutes
-                        $('#min').val('30');
-                        $('#max').val('60');
-                        break;
-                    case '4': // 1-2 hours
-                        $('#min').val('60');
-                        $('#max').val('120');
-                        break;
-                    case '5': // 2+ hours
-                        $('#min').val('120');
-                        $('#max').val('9999');
-                        break;
-                    default:
-                        $('#min').val('0');
-                        $('#max').val('9999');
-                }
-            }
-
-            filteredRows = allRows.filter(function(row) {
+            var playerCount = $('#filterPlayerCount').val();
+            var complexity = $('#filterComplexity').val();
+            var gameTime = $('#filterGameTime').val();
+            var category = $('#filterCategory').val();
+            var mechanic = $('#filterMechanic').val();
+            
+            // Apply filters
+            filteredRows = filteredRows.filter(function(row) {
                 var $row = $(row);
                 var name = $row.find('[data-column="name"]').text().toLowerCase();
                 var minPlayers = parseInt($row.find('[data-column="minplayers"]').text());
                 var maxPlayers = parseInt($row.find('[data-column="maxplayers"]').text());
                 var minTime = parseInt($row.find('[data-column="minplaytime"]').text());
                 var maxTime = parseInt($row.find('[data-column="maxplaytime"]').text());
-                var complexity = parseFloat($row.find('[data-column="complexity"]').text());
+                var complexityValue = parseFloat($row.find('[data-column="complexity"]').text());
                 var categories = $row.find('[data-column="gamecats"]').text().toLowerCase();
                 var mechanics = $row.find('[data-column="gamemechs"]').text().toLowerCase();
-
+                
                 // Search filter
-                var matchesSearch = !searchTerm || name.includes(searchTerm);
-
+                if (searchTerm && !name.includes(searchTerm)) {
+                    return false;
+                }
+                
                 // Player count filter
-                var matchesPlayers = true;
-                if (playerFilter) {
-                    if (playerFilter === '999') {
-                        matchesPlayers = minPlayers === 2 && maxPlayers === 2;
+                if (playerCount) {
+                    if (playerCount === '999') {
+                        // Special case for "2 Player only"
+                        if (!(minPlayers <= 2 && maxPlayers === 2)) {
+                            return false;
+                        }
                     } else {
-                        var playerCount = parseInt(playerFilter);
-                        matchesPlayers = minPlayers <= playerCount && maxPlayers >= playerCount;
+                        var count = parseInt(playerCount);
+                        if (!(count >= minPlayers && count <= maxPlayers)) {
+                            return false;
+                        }
                     }
                 }
-
+                
                 // Complexity filter
-                var matchesComplexity = true;
-                if (complexityFilter) {
+                if (complexity) {
                     var complexityMin = parseFloat($('#complexityMin').val());
                     var complexityMax = parseFloat($('#complexityMax').val());
-                    matchesComplexity = complexity >= complexityMin && complexity <= complexityMax;
+                    if (!(complexityValue >= complexityMin && complexityValue <= complexityMax)) {
+                        return false;
+                    }
                 }
-
+                
                 // Game time filter
-                var matchesTime = true;
-                if (gameTimeFilter) {
+                if (gameTime) {
                     var timeMin = parseInt($('#min').val());
                     var timeMax = parseInt($('#max').val());
-                    matchesTime = (minTime >= timeMin && minTime <= timeMax) || 
-                                 (maxTime >= timeMin && maxTime <= timeMax) ||
-                                 (minTime <= timeMin && maxTime >= timeMax);
+                    // Check if either min or max time falls within the range
+                    if (!((minTime >= timeMin && minTime <= timeMax) || 
+                          (maxTime >= timeMin && maxTime <= timeMax) ||
+                          (minTime <= timeMin && maxTime >= timeMax))) {
+                        return false;
+                    }
                 }
-
+                
                 // Category filter
-                var matchesCategory = !categoryFilter || 
-                    categories.split(',').map(cat => cat.trim().toLowerCase())
-                             .includes(categoryFilter.toLowerCase());
-
+                if (category && !categories.includes(category.toLowerCase())) {
+                    return false;
+                }
+                
                 // Mechanic filter
-                var matchesMechanic = !mechanicFilter || 
-                    mechanics.split(',').map(mech => mech.trim().toLowerCase())
-                            .includes(mechanicFilter.toLowerCase());
-
-                return matchesSearch && matchesPlayers && matchesComplexity && 
-                       matchesTime && matchesCategory && matchesMechanic;
+                if (mechanic && !mechanics.includes(mechanic.toLowerCase())) {
+                    return false;
+                }
+                
+                return true;
             });
-
+            
             // Reset to first page and update display
             currentPage = 1;
             updatePagination();
@@ -395,22 +517,6 @@ jQuery(document).ready(function($) {
         displayCurrentPage();
     }
 
-    // Add game form toggle
-    $('[data-action="add-game"]').on('click', function() {
-        $('#bgm-add-game-form-container').slideDown();
-    });
-    
-    // Cancel add game
-    $('[data-action="cancel-add-game"]').on('click', function() {
-        $('#bgm-add-game-form-container').slideUp();
-        // Clear any search results and input
-        $('#search-results').hide();
-        $('#bgm-add-game-form input[name="search"]').val('');
-        $('.search-results-grid').empty();
-        $('.no-local-results').hide();
-        $('.search-results-bgg').hide();
-    });
-    
     // Search functionality
     $('input[name="search"]').on('keypress', function(e) {
         // If Enter key is pressed
@@ -504,6 +610,11 @@ jQuery(document).ready(function($) {
         $bggResults.show();
     }
 
+    // Store BGG search results globally for pagination
+    let bggSearchResults = [];
+    let currentBggPage = 0;
+    const bggItemsPerPage = 10;
+
     // Handle manual BGG search
     $('[data-action="search-bgg"]').on('click', function() {
         var searchTerm = $('input[name="search"]').val();
@@ -525,23 +636,21 @@ jQuery(document).ready(function($) {
         // Hide local results
         $('.search-results-local').hide();
         
+        // Reset pagination
+        currentBggPage = 0;
+        bggSearchResults = [];
+        
         searchBGG(searchTerm, selectedTypes);
     });
 
     function searchBGG(searchTerm, selectedTypes) {
         var $bggResults = $('.search-results-bgg');
         var $bggGrid = $bggResults.find('.search-results-grid');
+        var $loadMore = $bggResults.find('.load-more-container');
         
         // Clear previous results and show loading state
-        $bggGrid.empty();
-        $bggGrid.append('<div class="spinner"></div>');
-        
-        // Log the request data
-        console.log('BGG Search Request:', {
-            searchTerm: searchTerm,
-            selectedTypes: selectedTypes,
-            nonce: bgm_ajax.nonce
-        });
+        $bggGrid.empty().append('<div class="spinner"></div>');
+        $loadMore.hide();
         
         $.ajax({
             url: bgm_ajax.ajax_url,
@@ -553,7 +662,6 @@ jQuery(document).ready(function($) {
                 security: bgm_ajax.nonce
             },
             success: function(response) {
-                console.log('BGG Search Response:', response);
                 $bggGrid.empty();
                 
                 if (response.success && Array.isArray(response.data)) {
@@ -562,10 +670,16 @@ jQuery(document).ready(function($) {
                         return;
                     }
                     
-                    response.data.forEach(function(game) {
-                        var gameCard = createGameCard(game);
-                        $bggGrid.append(gameCard);
-                    });
+                    // Store all results
+                    bggSearchResults = response.data;
+                    
+                    // Display first page
+                    displayBggPage();
+                    
+                    // Show load more if there are more results
+                    if (bggSearchResults.length > bggItemsPerPage) {
+                        $loadMore.show();
+                    }
                 } else {
                     $bggGrid.html('<div class="error-message">' + (response.data || 'Error searching BoardGameGeek') + '</div>');
                 }
@@ -579,6 +693,35 @@ jQuery(document).ready(function($) {
                 $bggGrid.html('<div class="error-message">Error searching BoardGameGeek. Please try again.</div>');
             }
         });
+    }
+
+    // Handle load more button click
+    $('[data-action="load-more"]').on('click', function() {
+        currentBggPage++;
+        displayBggPage();
+    });
+
+    function displayBggPage() {
+        var $bggGrid = $('.search-results-bgg .search-results-grid');
+        var $loadMore = $('.load-more-container');
+        
+        // Calculate start and end indices for current page
+        const start = currentBggPage * bggItemsPerPage;
+        const end = Math.min(start + bggItemsPerPage, bggSearchResults.length);
+        
+        // Get current page of results
+        const currentPageResults = bggSearchResults.slice(start, end);
+        
+        // Add new results to grid
+        currentPageResults.forEach(function(game) {
+            var gameCard = createGameCard(game);
+            $bggGrid.append(gameCard);
+        });
+        
+        // Hide load more button if we've shown all results
+        if (end >= bggSearchResults.length) {
+            $loadMore.hide();
+        }
     }
 
     function createGameCard(game) {
@@ -631,7 +774,7 @@ jQuery(document).ready(function($) {
         if (game.rank) {
             card.append($('<p>', {
                 class: 'game-rank',
-                text: 'Rank: ' + (game.rank || 'N/A')
+                text: 'Rank: ' + (game.rank === 999999 ? 'Not Ranked' : game.rank || 'N/A')
             }));
         }
 
@@ -702,132 +845,83 @@ jQuery(document).ready(function($) {
     });
     
     function filterGames() {
+        // Reset filtered rows to all rows
+        filteredRows = allRows.slice();
+        
+        // Get filter values
         var searchTerm = $('input[data-filter="search"]').val().toLowerCase();
-        var playerFilter = $('#filterPlayerCount').val();
-        var complexityFilter = $('#filterComplexity').val();
-        var gameTimeFilter = $('#filterGameTime').val();
-        var categoryFilter = $('#filterCategory').val();
-        var mechanicFilter = $('#filterMechanic').val();
-
-        // Update hidden inputs for complexity based on selection
-        if (complexityFilter) {
-            switch(complexityFilter) {
-                case '1': // Easy
-                    $('#complexityMin').val('0');
-                    $('#complexityMax').val('1.49');
-                    break;
-                case '2': // Light
-                    $('#complexityMin').val('1.5');
-                    $('#complexityMax').val('1.99');
-                    break;
-                case '3': // Medium Light
-                    $('#complexityMin').val('2');
-                    $('#complexityMax').val('2.49');
-                    break;
-                case '4': // Medium
-                    $('#complexityMin').val('2.5');
-                    $('#complexityMax').val('2.99');
-                    break;
-                case '5': // Medium Heavy
-                    $('#complexityMin').val('3');
-                    $('#complexityMax').val('3.49');
-                    break;
-                case '6': // Heavy
-                    $('#complexityMin').val('3.5');
-                    $('#complexityMax').val('5');
-                    break;
-                default:
-                    $('#complexityMin').val('0');
-                    $('#complexityMax').val('9999');
-            }
-        }
-
-        // Update hidden inputs for game time based on selection
-        if (gameTimeFilter) {
-            switch(gameTimeFilter) {
-                case '1': // 1-15 minutes
-                    $('#min').val('0');
-                    $('#max').val('15');
-                    break;
-                case '2': // 15-30 minutes
-                    $('#min').val('15');
-                    $('#max').val('30');
-                    break;
-                case '3': // 30-60 minutes
-                    $('#min').val('30');
-                    $('#max').val('60');
-                    break;
-                case '4': // 1-2 hours
-                    $('#min').val('60');
-                    $('#max').val('120');
-                    break;
-                case '5': // 2+ hours
-                    $('#min').val('120');
-                    $('#max').val('9999');
-                    break;
-                default:
-                    $('#min').val('0');
-                    $('#max').val('9999');
-            }
-        }
-
-        filteredRows = allRows.filter(function(row) {
+        var playerCount = $('#filterPlayerCount').val();
+        var complexity = $('#filterComplexity').val();
+        var gameTime = $('#filterGameTime').val();
+        var category = $('#filterCategory').val();
+        var mechanic = $('#filterMechanic').val();
+        
+        // Apply filters
+        filteredRows = filteredRows.filter(function(row) {
             var $row = $(row);
             var name = $row.find('[data-column="name"]').text().toLowerCase();
             var minPlayers = parseInt($row.find('[data-column="minplayers"]').text());
             var maxPlayers = parseInt($row.find('[data-column="maxplayers"]').text());
             var minTime = parseInt($row.find('[data-column="minplaytime"]').text());
             var maxTime = parseInt($row.find('[data-column="maxplaytime"]').text());
-            var complexity = parseFloat($row.find('[data-column="complexity"]').text());
+            var complexityValue = parseFloat($row.find('[data-column="complexity"]').text());
             var categories = $row.find('[data-column="gamecats"]').text().toLowerCase();
             var mechanics = $row.find('[data-column="gamemechs"]').text().toLowerCase();
-
+            
             // Search filter
-            var matchesSearch = !searchTerm || name.includes(searchTerm);
-
+            if (searchTerm && !name.includes(searchTerm)) {
+                return false;
+            }
+            
             // Player count filter
-            var matchesPlayers = true;
-            if (playerFilter) {
-                if (playerFilter === '999') {
-                    matchesPlayers = minPlayers === 2 && maxPlayers === 2;
+            if (playerCount) {
+                if (playerCount === '999') {
+                    // Special case for "2 Player only"
+                    if (!(minPlayers <= 2 && maxPlayers === 2)) {
+                        return false;
+                    }
                 } else {
-                    var playerCount = parseInt(playerFilter);
-                    matchesPlayers = minPlayers <= playerCount && maxPlayers >= playerCount;
+                    var count = parseInt(playerCount);
+                    if (!(count >= minPlayers && count <= maxPlayers)) {
+                        return false;
+                    }
                 }
             }
-
+            
             // Complexity filter
-            var matchesComplexity = true;
-            if (complexityFilter) {
+            if (complexity) {
                 var complexityMin = parseFloat($('#complexityMin').val());
                 var complexityMax = parseFloat($('#complexityMax').val());
-                matchesComplexity = complexity >= complexityMin && complexity <= complexityMax;
+                if (!(complexityValue >= complexityMin && complexityValue <= complexityMax)) {
+                    return false;
+                }
             }
-
+            
             // Game time filter
-            var matchesTime = true;
-            if (gameTimeFilter) {
+            if (gameTime) {
                 var timeMin = parseInt($('#min').val());
                 var timeMax = parseInt($('#max').val());
-                matchesTime = (minTime >= timeMin && minTime <= timeMax) || 
-                             (maxTime >= timeMin && maxTime <= timeMax) ||
-                             (minTime <= timeMin && maxTime >= timeMax);
+                // Check if either min or max time falls within the range
+                if (!((minTime >= timeMin && minTime <= timeMax) || 
+                      (maxTime >= timeMin && maxTime <= timeMax) ||
+                      (minTime <= timeMin && maxTime >= timeMax))) {
+                    return false;
+                }
             }
-
+            
             // Category filter
-            var matchesCategory = !categoryFilter || 
-                categories.split(',').map(cat => cat.trim().toLowerCase())
-                         .includes(categoryFilter.toLowerCase());
-
+            if (category && !categories.includes(category.toLowerCase())) {
+                return false;
+            }
+            
             // Mechanic filter
-            var matchesMechanic = !mechanicFilter || 
-                mechanics.split(',').map(mech => mech.trim().toLowerCase())
-                        .includes(mechanicFilter.toLowerCase());
-
-            return matchesSearch && matchesPlayers && matchesComplexity && 
-                   matchesTime && matchesCategory && matchesMechanic;
+            if (mechanic && !mechanics.includes(mechanic.toLowerCase())) {
+                return false;
+            }
+            
+            return true;
         });
-
+        
         // Reset to first page and update display
         currentPage = 1;
         updatePagination();
@@ -1097,5 +1191,74 @@ jQuery(document).ready(function($) {
                     .text('Add Game to List');
             }
         });
+    });
+
+    // Set up filter change handlers
+    $('input[data-filter="search"], #filterPlayerCount, #filterComplexity, #filterGameTime, #filterCategory, #filterMechanic').on('change', function() {
+        // Update hidden inputs for complexity based on selection
+        var complexityFilter = $('#filterComplexity').val();
+        if (complexityFilter) {
+            switch(complexityFilter) {
+                case '1': // Easy
+                    $('#complexityMin').val('0');
+                    $('#complexityMax').val('1.49');
+                    break;
+                case '2': // Light
+                    $('#complexityMin').val('1.5');
+                    $('#complexityMax').val('1.99');
+                    break;
+                case '3': // Medium Light
+                    $('#complexityMin').val('2');
+                    $('#complexityMax').val('2.49');
+                    break;
+                case '4': // Medium
+                    $('#complexityMin').val('2.5');
+                    $('#complexityMax').val('2.99');
+                    break;
+                case '5': // Medium Heavy
+                    $('#complexityMin').val('3');
+                    $('#complexityMax').val('3.49');
+                    break;
+                case '6': // Heavy
+                    $('#complexityMin').val('3.5');
+                    $('#complexityMax').val('5');
+                    break;
+                default:
+                    $('#complexityMin').val('0');
+                    $('#complexityMax').val('9999');
+            }
+        }
+
+        // Update hidden inputs for game time based on selection
+        var gameTimeFilter = $('#filterGameTime').val();
+        if (gameTimeFilter) {
+            switch(gameTimeFilter) {
+                case '1': // 1-15 minutes
+                    $('#min').val('0');
+                    $('#max').val('15');
+                    break;
+                case '2': // 15-30 minutes
+                    $('#min').val('15');
+                    $('#max').val('30');
+                    break;
+                case '3': // 30-60 minutes
+                    $('#min').val('30');
+                    $('#max').val('60');
+                    break;
+                case '4': // 1-2 hours
+                    $('#min').val('60');
+                    $('#max').val('120');
+                    break;
+                case '5': // 2+ hours
+                    $('#min').val('120');
+                    $('#max').val('9999');
+                    break;
+                default:
+                    $('#min').val('0');
+                    $('#max').val('9999');
+            }
+        }
+
+        filterGames();
     });
 }); 

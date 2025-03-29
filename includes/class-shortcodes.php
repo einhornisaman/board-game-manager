@@ -30,41 +30,51 @@ class BGM_Shortcodes {
         ob_start();
         ?>
         <div class="bgm-my-lists">
-            <?php if ($can_create): ?>
-                <div class="bgm-create-list">
-                    <button type="button" class="button button-primary" id="bgm-create-list-btn">Create New List</button>
-                    <form id="bgm-create-list-form" style="display: none;">
-                        <input type="text" name="list_name" placeholder="List Name" required>
-                        <textarea name="list_description" placeholder="Description (optional)"></textarea>
+            <div class="bgm-create-list">
+                <button type="button" id="bgm-create-list-btn">Create New List</button>
+                <form id="bgm-create-list-form" style="display: none;">
+                    <input type="text" name="list_name" placeholder="List Name" required>
+                    <textarea name="list_description" placeholder="Description (optional)"></textarea>
+                    <div class="form-actions">
                         <button type="submit" class="button button-primary">Create List</button>
                         <button type="button" class="button" id="bgm-cancel-create">Cancel</button>
-                    </form>
-                </div>
-            <?php endif; ?>
+                    </div>
+                </form>
+            </div>
             
-            <div class="bgm-lists-grid">
+            <div class="bgm-lists-container">
                 <?php if (empty($lists)): ?>
                     <p>You haven't created any game lists yet.</p>
                 <?php else: ?>
-                    <?php foreach ($lists as $list): ?>
-                        <div class="bgm-list-card">
-                            <h3><?php echo esc_html($list->name); ?></h3>
-                            <?php if (!empty($list->description)): ?>
-                                <p><?php echo esc_html($list->description); ?></p>
-                            <?php endif; ?>
-                            <div class="bgm-list-actions">
-                                <a href="<?php echo esc_url(add_query_arg('list_id', $list->id, get_page_link(get_option('bgm_list_games_page')))); ?>" class="button">Manage Games</a>
-                                <button type="button" class="button" data-action="edit-list" data-id="<?php echo esc_attr($list->id); ?>" data-name="<?php echo esc_attr($list->name); ?>" data-description="<?php echo esc_attr($list->description); ?>">Edit</button>
-                                <button type="button" class="button button-link-delete delete-list" data-id="<?php echo esc_attr($list->id); ?>">Delete</button>
+                    <?php 
+                    $total_lists = count($lists);
+                    foreach ($lists as $index => $list): 
+                        $is_first = $index === 0;
+                        $is_last = $index === ($total_lists - 1);
+                    ?>
+                        <div class="bgm-list-item" data-id="<?php echo esc_attr($list->id); ?>" data-order="<?php echo esc_attr($list->sort_order); ?>">
+                            <div class="list-controls">
+                                <?php if (!$is_first): ?>
+                                    <button type="button" class="move-arrow move-up" title="Move list up"></button>
+                                <?php endif; ?>
+                                <div class="list-grab-handle" title="Drag to reorder"></div>
+                                <?php if (!$is_last): ?>
+                                    <button type="button" class="move-arrow move-down" title="Move list down"></button>
+                                <?php endif; ?>
                             </div>
-                            <form class="bgm-edit-list-form" style="display: none;" data-id="<?php echo esc_attr($list->id); ?>">
-                                <input type="text" name="list_name" placeholder="List Name" value="<?php echo esc_attr($list->name); ?>" required>
-                                <textarea name="list_description" placeholder="Description (optional)"><?php echo esc_textarea($list->description); ?></textarea>
-                                <div class="form-actions">
-                                    <button type="submit" class="button button-primary">Save Changes</button>
-                                    <button type="button" class="button" data-action="cancel-edit">Cancel</button>
+                            <div class="list-content">
+                                <div class="list-header">
+                                    <h3><?php echo esc_html($list->name); ?></h3>
+                                    <button type="button" class="button button-edit" data-action="edit-list" data-id="<?php echo esc_attr($list->id); ?>" data-name="<?php echo esc_attr($list->name); ?>" data-description="<?php echo esc_attr($list->description); ?>">Edit</button>
                                 </div>
-                            </form>
+                                <?php if (!empty($list->description)): ?>
+                                    <p class="list-description"><?php echo esc_html($list->description); ?></p>
+                                <?php endif; ?>
+                                <div class="list-actions">
+                                    <a href="<?php echo esc_url(add_query_arg('list_id', $list->id, get_page_link(get_option('bgm_list_games_page')))); ?>" class="button button-manage">Manage This List</a>
+                                    <button type="button" class="button button-delete delete-list" data-id="<?php echo esc_attr($list->id); ?>">Delete This List</button>
+                                </div>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
@@ -85,7 +95,7 @@ class BGM_Shortcodes {
             // Helper function to get all current list names
             function getCurrentListNames() {
                 var names = [];
-                $('.bgm-list-card h3').each(function() {
+                $('.bgm-list-item h3').each(function() {
                     names.push($(this).text().toLowerCase().trim());
                 });
                 return names;
@@ -208,7 +218,7 @@ class BGM_Shortcodes {
             <?php endif; ?>
             
             <div class="bgm-list-actions" style="text-align: center; margin-bottom: 30px;">
-                <button type="button" class="button button-primary" data-action="add-game">Add Games</button>
+                <button type="button" class="bgm-list-manager-addgame-button" data-action="add-game">Add Games</button>
             </div>
 
             <div id="bgm-add-game-form-container" style="display: none;">
@@ -270,6 +280,10 @@ class BGM_Shortcodes {
                                     </div>
                                 </div>
                                 <div class="search-results-grid"></div>
+                                <div class="load-more-container" style="text-align: center; margin-top: 20px; display: none;">
+                                    <p class="load-more-text">Don't see the game you're looking for?</p>
+                                    <button type="button" class="button" data-action="load-more">See More Results</button>
+                                </div>
                             </div>
                         </div>
                         
@@ -424,8 +438,7 @@ class BGM_Shortcodes {
                             <th>Image</th>
                             <th class="sortable">Name</th>
                             <th class="sortable">Players</th>
-                            <th class="sortable">Min Time</th>
-                            <th class="sortable">Max Time</th>
+                            <th class="sortable">Play Time</th>
                             <th class="sortable">Complexity</th>
                             <th>Actions</th>
                         </tr>
@@ -441,20 +454,18 @@ class BGM_Shortcodes {
                                     <?php endif; ?>
                                 </td>
                                 <td data-column="name">
-                                    <strong><?php echo esc_html($game->name); ?></strong>
                                     <?php if (!empty($game->bgglink)): ?>
-                                        <div class="row-actions">
-                                            <span class="view">
-                                                <a href="<?php echo esc_url($game->bgglink); ?>" target="_blank">View on BGG</a>
-                                            </span>
-                                        </div>
+                                        <strong><a href="<?php echo esc_url($game->bgglink); ?>" target="_blank" class="game-name-link" title="View on BGG"><?php echo esc_html($game->name); ?></a></strong>
+                                    <?php else: ?>
+                                        <strong><?php echo esc_html($game->name); ?></strong>
                                     <?php endif; ?>
                                 </td>
                                 <td>
                                     <span data-column="minplayers"><?php echo esc_html($game->minplayers); ?></span>-<span data-column="maxplayers"><?php echo esc_html($game->maxplayers); ?></span>
                                 </td>
-                                <td data-column="minplaytime"><?php echo esc_html($game->minplaytime); ?></td>
-                                <td data-column="maxplaytime"><?php echo esc_html($game->maxplaytime); ?></td>
+                                <td>
+                                    <span data-column="minplaytime"><?php echo esc_html($game->minplaytime); ?></span>-<span data-column="maxplaytime"><?php echo esc_html($game->maxplaytime); ?></span>
+                                </td>
                                 <td data-column="complexity"><?php echo number_format($game->complexity, 1); ?></td>
                                 <td data-column="gamecats" style="display: none;"><?php echo esc_html($game->gamecats); ?></td>
                                 <td data-column="gamemechs" style="display: none;"><?php echo esc_html($game->gamemechs); ?></td>
@@ -663,14 +674,30 @@ class BGM_Shortcodes {
             text-align: center;
             margin: 20px 0;
         }
-        .bgg-search-buttons {
-            display: flex;
-            gap: 8px;
-            justify-content: center;
-            margin-top: 15px;
+        .bgg-search-header {
+            margin-bottom: 10px;
+            text-align: center;
         }
+
+        .bgg-search-header p {
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .bgg-search-buttons {
+            margin-bottom: 10px;
+        }
+
         .bgg-search-buttons button {
-            min-width: 80px;
+            min-width: 120px;
+            padding: 6px 12px;
+        }
+
+        .search-results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
         }
 
         /* Message styles */
@@ -679,6 +706,74 @@ class BGM_Shortcodes {
             font-weight: 500;
             margin: 10px 0;
             padding: 5px 0;
+        }
+
+        /* Add to the CSS section */
+        .load-more-container {
+            padding: 20px 0;
+            border-top: 1px solid #eee;
+            margin-top: 20px;
+        }
+        
+        .load-more-text {
+            color: #666;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        /* Add to the CSS section */
+        .game-name-link {
+            text-decoration: none;
+            color: inherit;
+            cursor: pointer;
+            position: relative;
+            display: inline-block;
+        }
+
+        .game-name-link:hover {
+            color: #2271b1;
+        }
+
+        .game-name-link::before {
+            content: attr(title);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 5px 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border-radius: 4px;
+            font-size: 14px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0s;
+            pointer-events: none;
+            margin-bottom: 5px;
+            z-index: 1000;
+        }
+
+        .game-name-link::after {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: rgba(0, 0, 0, 0.8);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0s;
+            pointer-events: none;
+            margin-bottom: -6px;
+            z-index: 1000;
+        }
+
+        .game-name-link:hover::before,
+        .game-name-link:hover::after {
+            opacity: 1;
+            visibility: visible;
         }
         </style>
         <?php

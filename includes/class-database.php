@@ -55,10 +55,12 @@ class BGM_Database {
             `user_id` bigint(20) UNSIGNED NOT NULL,
             `name` varchar(255) NOT NULL,
             `description` text DEFAULT NULL,
+            `sort_order` int(11) DEFAULT 0,
             `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
             `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
-            KEY `user_id` (`user_id`)
+            KEY `user_id` (`user_id`),
+            KEY `sort_order` (`sort_order`)
         ) $charset_collate;";
         
         dbDelta($sql);

@@ -2,81 +2,282 @@
 
 /* My Lists Page */
 .bgm-my-lists {
-    margin: 20px 0;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 20px;
 }
 
 .bgm-create-list {
-    margin-bottom: 20px;
+    margin: 40px 0 30px;
+    text-align: center;
+}
+
+/* Create New List button styling */
+#bgm-create-list-btn {
+    background-color: #0073aa;
+    color: white;
+    border: 1px solid #006291;
+    padding: 8px 16px;
+    font-size: 1em;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-block;
+    margin: 0 auto;
+    text-decoration: none;
+    font-weight: normal;
+}
+
+#bgm-create-list-btn:hover {
+    background-color: #006291;
 }
 
 #bgm-create-list-form {
     background: #fff;
-    padding: 15px;
+    padding: 20px;
     border: 1px solid #ddd;
     border-radius: 4px;
-    margin-top: 10px;
+    margin: 10px auto;
     max-width: 500px;
 }
 
 #bgm-create-list-form input[type="text"],
 #bgm-create-list-form textarea {
     width: 100%;
-    margin-bottom: 10px;
+    margin-bottom: 15px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
 }
 
 #bgm-create-list-form textarea {
     min-height: 100px;
+    resize: vertical;
 }
 
-.bgm-lists-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
+.form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
 }
 
-.bgm-list-card {
+.form-actions button {
+    min-width: 100px;
+}
+
+.bgm-lists-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+}
+
+.bgm-list-item {
+    width: 100%;
     background: #fff;
     border: 1px solid #ddd;
     border-radius: 4px;
-    padding: 15px;
+    padding: 20px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    cursor: move;
 }
 
-.bgm-list-card h3 {
-    margin: 0 0 10px 0;
+.list-controls {
+    position: relative;
+    margin-right: 10px;
+    width: 32px;
+    height: 80px;
+}
+
+.move-arrow {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: -20px;
+    margin-top: -20px;
+}
+
+.move-arrow.move-up {
+    top: 0;
+}
+
+.move-arrow.move-down {
+    bottom: 0;
+}
+
+.move-arrow:hover {
+    color: #000;
+}
+
+.move-arrow.move-up::after {
+    content: '▲';
+    font-size: 24px;
+}
+
+.move-arrow.move-down::after {
+    content: '▼';
+    font-size: 24px;
+}
+
+.list-grab-handle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 32px;
+    height: 32px;
+    cursor: grab;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.list-grab-handle:hover {
+    color: #000;
+}
+
+.list-grab-handle::before {
+    content: '• •\A• •\A• •';
+    white-space: pre;
+    line-height: 0.8;
+    font-size: 16px;
+    text-align: center;
+}
+
+/* Remove any legacy arrow styles */
+.move-arrow img,
+.move-arrow svg {
+    display: none;
+}
+
+.list-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.list-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.list-header h3 {
+    margin: 0;
+    flex: 1;
     font-size: 1.2em;
 }
 
-.bgm-list-card p {
-    margin: 0 0 15px 0;
-    color: #666;
-}
-
-.bgm-list-actions {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-start;
-    align-items: center;
-}
-
-.bgm-list-actions button {
+/* Common button styles */
+.bgm-list-item button,
+.bgm-list-item a.button {
+    display: inline-block;
     padding: 8px 16px;
-    font-size: 1em;
+    font-size: 0.9em;
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s ease;
-    min-width: 120px;
+    text-decoration: none;
+    text-align: center;
+    border: 1px solid transparent;
 }
 
-.bgm-list-actions .button-primary {
-    background: #0073aa;
+/* Edit button */
+.button-edit {
+    background-color: #0073aa;
     color: white;
-    border: 1px solid #006291;
+    border-color: #006291;
 }
 
-.bgm-list-actions .button-primary:hover {
-    background: #006291;
+.button-edit:hover {
+    background-color: #006291;
+}
+
+/* Manage button */
+.button-manage {
+    background-color: #4CAF50;
+    color: white;
+    border-color: #45a049;
+}
+
+.button-manage:hover {
+    background-color: #45a049;
+}
+
+/* Delete button */
+.button-delete {
+    background-color: #dc3545;
+    color: white;
+    border-color: #c82333;
+}
+
+.button-delete:hover {
+    background-color: #c82333;
+}
+
+.list-description {
+    margin: 0 0 15px 0;
+    color: #666;
+    font-size: 0.95em;
+}
+
+.list-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.list-actions button,
+.list-actions a {
+    flex: 1;
+}
+
+.bgm-edit-list-form {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f8f8f8;
+    border-radius: 4px;
+}
+
+.bgm-edit-list-form input[type="text"],
+.bgm-edit-list-form textarea {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.bgm-edit-list-form textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+.bgm-edit-list-form .form-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Dragging styles */
+.bgm-list-item.dragging {
+    opacity: 0.5;
+    background: #f8f9fa;
+}
+
+.bgm-list-item.drag-over {
+    border: 2px dashed #0073aa;
+    margin: -1px;
 }
 
 /* List Games Page */
@@ -164,7 +365,7 @@
     border-right: 1px solid #ddd;
     background-color: #f8f9fa;
     font-weight: 600;
-    font-size: 0.9em;
+    font-size: 0.8em;
     line-height: 1.2;
 }
 
@@ -198,7 +399,7 @@
     vertical-align: middle;
     border-bottom: 1px solid #ddd;
     border-right: 1px solid #ddd;
-    font-size: 0.9em;
+    font-size: 0.8em;
     background: white;
 }
 
@@ -619,28 +820,6 @@
     color: #666;
     margin-top: 5px;
     text-align: center;
-}
-
-.bgm-edit-list-form {
-    margin-top: 15px;
-    padding: 15px;
-    background: #f8f8f8;
-    border-radius: 4px;
-}
-
-.bgm-edit-list-form input[type="text"],
-.bgm-edit-list-form textarea {
-    width: 100%;
-    margin-bottom: 10px;
-}
-
-.bgm-edit-list-form textarea {
-    min-height: 80px;
-}
-
-.bgm-edit-list-form .form-actions {
-    display: flex;
-    gap: 10px;
 }
 
 .bgm-manage-game-list {
@@ -1075,4 +1254,22 @@ button.search-button:hover {
     .pagination {
         justify-content: center;
     }
+}
+
+/* Add Games button in manage game list */
+.bgm-list-manager-addgame-button {
+    background-color: #4CAF50;
+    color: white;
+    border: 1px solid #000;
+    border-radius: 4px;
+    padding: 8px 18px;
+    font-size: 0.8em;
+    min-width: 150px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.bgm-list-manager-addgame-button:hover {
+    background-color: #45a049;
 } 
